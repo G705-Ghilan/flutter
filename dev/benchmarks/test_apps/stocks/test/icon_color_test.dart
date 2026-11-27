@@ -9,10 +9,12 @@ import 'package:stocks/stock_data.dart' as stock_data;
 
 Element? findElementOfExactWidgetTypeGoingDown(Element node, Type targetType) {
   void walker(Element child) {
-    if (child.widget.runtimeType == targetType)
+    if (child.widget.runtimeType == targetType) {
       throw child;
+    }
     child.visitChildElements(walker);
   }
+
   try {
     walker(node);
   } on Element catch (result) {
@@ -30,16 +32,18 @@ Element? findElementOfExactWidgetTypeGoingUp(Element node, Type targetType) {
     }
     return true;
   }
+
   node.visitAncestorElements(walker);
   return result;
 }
 
-final RegExp materialIconAssetNameColorExtractor = RegExp(r'[^/]+/ic_.+_(white|black)_[0-9]+dp\.png');
-
 void checkIconColor(WidgetTester tester, String label, Color color) {
-  final Element listTile = findElementOfExactWidgetTypeGoingUp(tester.element(find.text(label)), ListTile)!;
+  final Element listTile = findElementOfExactWidgetTypeGoingUp(
+    tester.element(find.text(label)),
+    ListTile,
+  )!;
   final Element asset = findElementOfExactWidgetTypeGoingDown(listTile, RichText)!;
-  final RichText richText = asset.widget as RichText;
+  final richText = asset.widget as RichText;
   expect(richText.text.style!.color, equals(color));
 }
 
@@ -59,8 +63,11 @@ void main() {
     expect(find.text('Account Balance'), findsNothing);
 
     // drag the drawer out
-    final Offset left = Offset(0.0, (WidgetsBinding.instance.window.physicalSize / WidgetsBinding.instance.window.devicePixelRatio).height / 2.0);
-    final Offset right = Offset((WidgetsBinding.instance.window.physicalSize / WidgetsBinding.instance.window.devicePixelRatio).width, left.dy);
+    final left = Offset(
+      0.0,
+      (tester.view.physicalSize / tester.view.devicePixelRatio).height / 2.0,
+    );
+    final right = Offset((tester.view.physicalSize / tester.view.devicePixelRatio).width, left.dy);
     final TestGesture gesture = await tester.startGesture(left);
     await tester.pump();
     await gesture.moveTo(right);

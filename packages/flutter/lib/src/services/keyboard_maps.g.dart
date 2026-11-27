@@ -1468,6 +1468,35 @@ const Map<int, PhysicalKeyboardKey> kIosToPhysicalKey = <int, PhysicalKeyboardKe
   0x000000e7: PhysicalKeyboardKey.metaRight,
 };
 
+/// Maps iOS specific string values of nonvisible keys to logical keys
+///
+/// Some unprintable keys on iOS has literal names on their key label, such as
+/// "UIKeyInputEscape". See:
+/// https://developer.apple.com/documentation/uikit/uikeycommand/input_strings_for_special_keys?language=objc
+const Map<String, LogicalKeyboardKey> kIosSpecialLogicalMap = <String, LogicalKeyboardKey>{
+  'UIKeyInputEscape': LogicalKeyboardKey.escape,
+  'UIKeyInputF1': LogicalKeyboardKey.f1,
+  'UIKeyInputF2': LogicalKeyboardKey.f2,
+  'UIKeyInputF3': LogicalKeyboardKey.f3,
+  'UIKeyInputF4': LogicalKeyboardKey.f4,
+  'UIKeyInputF5': LogicalKeyboardKey.f5,
+  'UIKeyInputF6': LogicalKeyboardKey.f6,
+  'UIKeyInputF7': LogicalKeyboardKey.f7,
+  'UIKeyInputF8': LogicalKeyboardKey.f8,
+  'UIKeyInputF9': LogicalKeyboardKey.f9,
+  'UIKeyInputF10': LogicalKeyboardKey.f10,
+  'UIKeyInputF11': LogicalKeyboardKey.f11,
+  'UIKeyInputF12': LogicalKeyboardKey.f12,
+  'UIKeyInputUpArrow': LogicalKeyboardKey.arrowUp,
+  'UIKeyInputDownArrow': LogicalKeyboardKey.arrowDown,
+  'UIKeyInputLeftArrow': LogicalKeyboardKey.arrowLeft,
+  'UIKeyInputRightArrow': LogicalKeyboardKey.arrowRight,
+  'UIKeyInputHome': LogicalKeyboardKey.home,
+  'UIKeyInputEnd': LogicalKeyboardKey.enter,
+  'UIKeyInputPageUp': LogicalKeyboardKey.pageUp,
+  'UIKeyInputPageDown': LogicalKeyboardKey.pageDown,
+};
+
 /// A map of iOS key codes which have printable representations, but appear
 /// on the number pad. Used to provide different key objects for keys like
 /// KEY_EQUALS and NUMPAD_EQUALS.
@@ -1724,7 +1753,7 @@ const Map<int, LogicalKeyboardKey> kGtkToLogicalKey = <int, LogicalKeyboardKey>{
   64795: LogicalKeyboardKey.exSel,
   64797: LogicalKeyboardKey.printScreen,
   64798: LogicalKeyboardKey.enter,
-  65027: LogicalKeyboardKey.altRight,
+  65027: LogicalKeyboardKey.altGraph,
   65032: LogicalKeyboardKey.groupNext,
   65034: LogicalKeyboardKey.groupPrevious,
   65036: LogicalKeyboardKey.groupFirst,
@@ -2710,10 +2739,25 @@ const Map<String, LogicalKeyboardKey> kWebNumPadMap = <String, LogicalKeyboardKe
 /// typically for numpad keys and modifier keys. Used to provide different key
 /// objects for keys like KEY_EQUALS and NUMPAD_EQUALS.
 const Map<String, List<LogicalKeyboardKey?>> kWebLocationMap = <String, List<LogicalKeyboardKey?>>{
-  '*': <LogicalKeyboardKey?>[LogicalKeyboardKey.asterisk, null, null, LogicalKeyboardKey.numpadMultiply],
+  '*': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.asterisk,
+    null,
+    null,
+    LogicalKeyboardKey.numpadMultiply,
+  ],
   '+': <LogicalKeyboardKey?>[LogicalKeyboardKey.add, null, null, LogicalKeyboardKey.numpadAdd],
-  '-': <LogicalKeyboardKey?>[LogicalKeyboardKey.minus, null, null, LogicalKeyboardKey.numpadSubtract],
-  '.': <LogicalKeyboardKey?>[LogicalKeyboardKey.period, null, null, LogicalKeyboardKey.numpadDecimal],
+  '-': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.minus,
+    null,
+    null,
+    LogicalKeyboardKey.numpadSubtract,
+  ],
+  '.': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.period,
+    null,
+    null,
+    LogicalKeyboardKey.numpadDecimal,
+  ],
   '/': <LogicalKeyboardKey?>[LogicalKeyboardKey.slash, null, null, LogicalKeyboardKey.numpadDivide],
   '0': <LogicalKeyboardKey?>[LogicalKeyboardKey.digit0, null, null, LogicalKeyboardKey.numpad0],
   '1': <LogicalKeyboardKey?>[LogicalKeyboardKey.digit1, null, null, LogicalKeyboardKey.numpad1],
@@ -2725,22 +2769,93 @@ const Map<String, List<LogicalKeyboardKey?>> kWebLocationMap = <String, List<Log
   '7': <LogicalKeyboardKey?>[LogicalKeyboardKey.digit7, null, null, LogicalKeyboardKey.numpad7],
   '8': <LogicalKeyboardKey?>[LogicalKeyboardKey.digit8, null, null, LogicalKeyboardKey.numpad8],
   '9': <LogicalKeyboardKey?>[LogicalKeyboardKey.digit9, null, null, LogicalKeyboardKey.numpad9],
-  'Alt': <LogicalKeyboardKey?>[LogicalKeyboardKey.altLeft, LogicalKeyboardKey.altLeft, LogicalKeyboardKey.altRight, null],
-  'ArrowDown': <LogicalKeyboardKey?>[LogicalKeyboardKey.arrowDown, null, null, LogicalKeyboardKey.numpad2],
-  'ArrowLeft': <LogicalKeyboardKey?>[LogicalKeyboardKey.arrowLeft, null, null, LogicalKeyboardKey.numpad4],
-  'ArrowRight': <LogicalKeyboardKey?>[LogicalKeyboardKey.arrowRight, null, null, LogicalKeyboardKey.numpad6],
-  'ArrowUp': <LogicalKeyboardKey?>[LogicalKeyboardKey.arrowUp, null, null, LogicalKeyboardKey.numpad8],
+  'Alt': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.altLeft,
+    LogicalKeyboardKey.altLeft,
+    LogicalKeyboardKey.altRight,
+    null,
+  ],
+  'AltGraph': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.altGraph,
+    null,
+    LogicalKeyboardKey.altGraph,
+    null,
+  ],
+  'ArrowDown': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.arrowDown,
+    null,
+    null,
+    LogicalKeyboardKey.numpad2,
+  ],
+  'ArrowLeft': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.arrowLeft,
+    null,
+    null,
+    LogicalKeyboardKey.numpad4,
+  ],
+  'ArrowRight': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.arrowRight,
+    null,
+    null,
+    LogicalKeyboardKey.numpad6,
+  ],
+  'ArrowUp': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.arrowUp,
+    null,
+    null,
+    LogicalKeyboardKey.numpad8,
+  ],
   'Clear': <LogicalKeyboardKey?>[LogicalKeyboardKey.clear, null, null, LogicalKeyboardKey.numpad5],
-  'Control': <LogicalKeyboardKey?>[LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.controlRight, null],
-  'Delete': <LogicalKeyboardKey?>[LogicalKeyboardKey.delete, null, null, LogicalKeyboardKey.numpadDecimal],
+  'Control': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.controlLeft,
+    LogicalKeyboardKey.controlLeft,
+    LogicalKeyboardKey.controlRight,
+    null,
+  ],
+  'Delete': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.delete,
+    null,
+    null,
+    LogicalKeyboardKey.numpadDecimal,
+  ],
   'End': <LogicalKeyboardKey?>[LogicalKeyboardKey.end, null, null, LogicalKeyboardKey.numpad1],
-  'Enter': <LogicalKeyboardKey?>[LogicalKeyboardKey.enter, null, null, LogicalKeyboardKey.numpadEnter],
+  'Enter': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.enter,
+    null,
+    null,
+    LogicalKeyboardKey.numpadEnter,
+  ],
   'Home': <LogicalKeyboardKey?>[LogicalKeyboardKey.home, null, null, LogicalKeyboardKey.numpad7],
-  'Insert': <LogicalKeyboardKey?>[LogicalKeyboardKey.insert, null, null, LogicalKeyboardKey.numpad0],
-  'Meta': <LogicalKeyboardKey?>[LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.metaRight, null],
-  'PageDown': <LogicalKeyboardKey?>[LogicalKeyboardKey.pageDown, null, null, LogicalKeyboardKey.numpad3],
-  'PageUp': <LogicalKeyboardKey?>[LogicalKeyboardKey.pageUp, null, null, LogicalKeyboardKey.numpad9],
-  'Shift': <LogicalKeyboardKey?>[LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.shiftRight, null],
+  'Insert': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.insert,
+    null,
+    null,
+    LogicalKeyboardKey.numpad0,
+  ],
+  'Meta': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.metaLeft,
+    LogicalKeyboardKey.metaLeft,
+    LogicalKeyboardKey.metaRight,
+    null,
+  ],
+  'PageDown': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.pageDown,
+    null,
+    null,
+    LogicalKeyboardKey.numpad3,
+  ],
+  'PageUp': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.pageUp,
+    null,
+    null,
+    LogicalKeyboardKey.numpad9,
+  ],
+  'Shift': <LogicalKeyboardKey?>[
+    LogicalKeyboardKey.shiftLeft,
+    LogicalKeyboardKey.shiftLeft,
+    LogicalKeyboardKey.shiftRight,
+    null,
+  ],
 };
 
 /// Maps Windows KeyboardEvent codes to the matching [LogicalKeyboardKey].

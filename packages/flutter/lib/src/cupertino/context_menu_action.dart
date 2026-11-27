@@ -4,7 +4,9 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+
 import 'colors.dart';
+import 'context_menu.dart';
 
 /// A button in a _ContextMenuSheet.
 ///
@@ -20,9 +22,7 @@ class CupertinoContextMenuAction extends StatefulWidget {
     this.isDestructiveAction = false,
     this.onPressed,
     this.trailingIcon,
-  }) : assert(child != null),
-       assert(isDefaultAction != null),
-       assert(isDestructiveAction != null);
+  });
 
   /// The widget that will be placed inside the action.
   final Widget child;
@@ -49,19 +49,15 @@ class CupertinoContextMenuAction extends StatefulWidget {
 }
 
 class _CupertinoContextMenuActionState extends State<CupertinoContextMenuAction> {
-  static const Color _kBackgroundColor = CupertinoDynamicColor.withBrightness(
-    color: Color(0xFFEEEEEE),
-    darkColor: Color(0xFF212122),
-  );
   static const Color _kBackgroundColorPressed = CupertinoDynamicColor.withBrightness(
     color: Color(0xFFDDDDDD),
     darkColor: Color(0xFF3F3F40),
   );
-  static const double _kButtonHeight = 56.0;
+  static const double _kButtonHeight = 43;
   static const TextStyle _kActionSheetActionStyle = TextStyle(
-    fontFamily: '.SF UI Text',
+    fontFamily: 'CupertinoSystemText',
     inherit: false,
-    fontSize: 20.0,
+    fontSize: 16.0,
     fontWeight: FontWeight.w400,
     color: CupertinoColors.black,
     textBaseline: TextBaseline.alphabetic,
@@ -91,16 +87,15 @@ class _CupertinoContextMenuActionState extends State<CupertinoContextMenuAction>
   TextStyle get _textStyle {
     if (widget.isDefaultAction) {
       return _kActionSheetActionStyle.copyWith(
+        color: CupertinoDynamicColor.resolve(CupertinoColors.label, context),
         fontWeight: FontWeight.w600,
       );
     }
     if (widget.isDestructiveAction) {
-      return _kActionSheetActionStyle.copyWith(
-        color: CupertinoColors.destructiveRed,
-      );
+      return _kActionSheetActionStyle.copyWith(color: CupertinoColors.destructiveRed);
     }
     return _kActionSheetActionStyle.copyWith(
-      color: CupertinoDynamicColor.resolve(CupertinoColors.label, context)
+      color: CupertinoDynamicColor.resolve(CupertinoColors.label, context),
     );
   }
 
@@ -116,35 +111,25 @@ class _CupertinoContextMenuActionState extends State<CupertinoContextMenuAction>
         onTap: widget.onPressed,
         behavior: HitTestBehavior.opaque,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            minHeight: _kButtonHeight,
-          ),
+          constraints: const BoxConstraints(minHeight: _kButtonHeight),
           child: Semantics(
             button: true,
-            child: Container(
-              decoration: BoxDecoration(
-                color: _isPressed
+            child: ColoredBox(
+              color: _isPressed
                   ? CupertinoDynamicColor.resolve(_kBackgroundColorPressed, context)
-                  : CupertinoDynamicColor.resolve(_kBackgroundColor, context),
-              ),
-              padding: const EdgeInsets.symmetric(
-                vertical: 16.0,
-                horizontal: 10.0,
-              ),
-              child: DefaultTextStyle(
-                style: _textStyle,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: <Widget>[
-                    Flexible(
-                      child: widget.child,
-                    ),
-                    if (widget.trailingIcon != null)
-                      Icon(
-                        widget.trailingIcon,
-                        color: _textStyle.color,
-                      ),
-                  ],
+                  : CupertinoDynamicColor.resolve(CupertinoContextMenu.kBackgroundColor, context),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(15.5, 8.0, 17.5, 8.0),
+                child: DefaultTextStyle(
+                  style: _textStyle,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: <Widget>[
+                      Flexible(child: widget.child),
+                      if (widget.trailingIcon != null)
+                        Icon(widget.trailingIcon, color: _textStyle.color, size: 21.0),
+                    ],
+                  ),
                 ),
               ),
             ),

@@ -2,6 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'package:flutter/material.dart';
+/// @docImport 'package:flutter/rendering.dart';
+/// @docImport 'package:flutter_test/flutter_test.dart';
+///
+/// @docImport 'actions.dart';
+/// @docImport 'focus_manager.dart';
+/// @docImport 'scroll_view.dart';
+/// @docImport 'scrollable.dart';
+/// @docImport 'scrollable_helpers.dart';
+/// @docImport 'shortcuts.dart';
+library;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
@@ -17,12 +29,14 @@ const Set<TargetPlatform> _kMobilePlatforms = <TargetPlatform>{
 
 /// Associates a [ScrollController] with a subtree.
 ///
+/// {@youtube 560 315 https://www.youtube.com/watch?v=33_0ABjFJUU}
+///
 /// When a [ScrollView] has [ScrollView.primary] set to true, the [ScrollView]
 /// uses [of] to inherit the [PrimaryScrollController] associated with its
 /// subtree.
 ///
 /// A ScrollView that doesn't have a controller or the primary flag set will
-/// inherit the PrimarySCrollController, if [shouldInherit] allows it. By
+/// inherit the PrimaryScrollController, if [shouldInherit] allows it. By
 /// default [shouldInherit] is true for mobile platforms when the ScrollView has
 /// a scroll direction of [Axis.vertical]. This automatic inheritance can be
 /// configured with [automaticallyInheritForPlatforms] and [scrollDirection].
@@ -51,15 +65,13 @@ class PrimaryScrollController extends InheritedWidget {
     this.automaticallyInheritForPlatforms = _kMobilePlatforms,
     this.scrollDirection = Axis.vertical,
     required super.child,
-  }) : assert(controller != null);
+  });
 
   /// Creates a subtree without an associated [ScrollController].
-  const PrimaryScrollController.none({
-    super.key,
-    required super.child,
-  }) : automaticallyInheritForPlatforms = const <TargetPlatform>{},
-       scrollDirection = null,
-       controller = null;
+  const PrimaryScrollController.none({super.key, required super.child})
+    : automaticallyInheritForPlatforms = const <TargetPlatform>{},
+      scrollDirection = null,
+      controller = null;
 
   /// The [ScrollController] associated with the subtree.
   ///
@@ -81,6 +93,9 @@ class PrimaryScrollController extends InheritedWidget {
   /// PrimaryScrollController is inherited, ScrollView will insert
   /// PrimaryScrollController.none into the tree to prevent further descendant
   /// ScrollViews from inheriting the current PrimaryScrollController.
+  ///
+  /// For the direction in which active scrolling may be occurring, see
+  /// [ScrollDirection].
   ///
   /// Defaults to [Axis.vertical].
   final Axis? scrollDirection;
@@ -108,7 +123,8 @@ class PrimaryScrollController extends InheritedWidget {
   /// not called by ScrollView as it will have determined whether or not to
   /// inherit the PrimaryScrollController.
   static bool shouldInherit(BuildContext context, Axis scrollDirection) {
-    final PrimaryScrollController? result = context.findAncestorWidgetOfExactType<PrimaryScrollController>();
+    final PrimaryScrollController? result = context
+        .findAncestorWidgetOfExactType<PrimaryScrollController>();
     if (result == null) {
       return false;
     }
@@ -125,9 +141,51 @@ class PrimaryScrollController extends InheritedWidget {
   ///
   /// Returns null if there is no [ScrollController] associated with the given
   /// context.
-  static ScrollController? of(BuildContext context) {
-    final PrimaryScrollController? result = context.dependOnInheritedWidgetOfExactType<PrimaryScrollController>();
+  ///
+  /// Calling this method will create a dependency on the closest
+  /// [PrimaryScrollController] in the [context], if there is one.
+  ///
+  /// See also:
+  ///
+  /// * [PrimaryScrollController.of], which is similar to this method, but
+  ///   asserts if no [PrimaryScrollController] ancestor is found.
+  static ScrollController? maybeOf(BuildContext context) {
+    final PrimaryScrollController? result = context
+        .dependOnInheritedWidgetOfExactType<PrimaryScrollController>();
     return result?.controller;
+  }
+
+  /// Returns the [ScrollController] most closely associated with the given
+  /// context.
+  ///
+  /// If no ancestor is found, this method will assert in debug mode, and throw
+  /// an exception in release mode.
+  ///
+  /// Calling this method will create a dependency on the closest
+  /// [PrimaryScrollController] in the [context].
+  ///
+  /// See also:
+  ///
+  /// * [PrimaryScrollController.maybeOf], which is similar to this method, but
+  ///   returns null if no [PrimaryScrollController] ancestor is found.
+  static ScrollController of(BuildContext context) {
+    final ScrollController? controller = maybeOf(context);
+    assert(() {
+      if (controller == null) {
+        throw FlutterError(
+          'PrimaryScrollController.of() was called with a context that does not contain a '
+          'PrimaryScrollController widget.\n'
+          'No PrimaryScrollController widget ancestor could be found starting from the '
+          'context that was passed to PrimaryScrollController.of(). This can happen '
+          'because you are using a widget that looks for a PrimaryScrollController '
+          'ancestor, but no such ancestor exists.\n'
+          'The context used was:\n'
+          '  $context',
+        );
+      }
+      return true;
+    }());
+    return controller!;
   }
 
   @override
@@ -136,6 +194,13 @@ class PrimaryScrollController extends InheritedWidget {
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    properties.add(DiagnosticsProperty<ScrollController>('controller', controller, ifNull: 'no controller', showName: false));
+    properties.add(
+      DiagnosticsProperty<ScrollController>(
+        'controller',
+        controller,
+        ifNull: 'no controller',
+        showName: false,
+      ),
+    );
   }
 }

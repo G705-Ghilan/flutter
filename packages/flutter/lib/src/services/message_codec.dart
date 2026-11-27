@@ -29,13 +29,13 @@ abstract class MessageCodec<T> {
   T? decodeMessage(ByteData? message);
 }
 
-/// An command object representing the invocation of a named method.
+/// A command object representing the invocation of a named method.
+@pragma('vm:keep-name')
 @immutable
 class MethodCall {
   /// Creates a [MethodCall] representing the invocation of [method] with the
   /// specified [arguments].
-  const MethodCall(this.method, [this.arguments])
-    : assert(method != null);
+  const MethodCall(this.method, [this.arguments]);
 
   /// The name of the method to be called.
   final String method;
@@ -89,7 +89,7 @@ abstract class MethodCodec {
   ///
   /// The specified error [code], human-readable error [message] and error
   /// [details] correspond to the fields of [PlatformException].
-  ByteData encodeErrorEnvelope({ required String code, String? message, Object? details});
+  ByteData encodeErrorEnvelope({required String code, String? message, Object? details});
 }
 
 /// Thrown to indicate that a platform interaction failed in the platform
@@ -109,12 +109,7 @@ class PlatformException implements Exception {
   /// Creates a [PlatformException] with the specified error [code] and optional
   /// [message], and with the optional error [details] which must be a valid
   /// value for the [MethodCodec] involved in the interaction.
-  PlatformException({
-    required this.code,
-    this.message,
-    this.details,
-    this.stacktrace,
-  }) : assert(code != null);
+  PlatformException({required this.code, this.message, this.details, this.stacktrace});
 
   /// An error code.
   final String code;
@@ -137,7 +132,7 @@ class PlatformException implements Exception {
   ///
   /// ```dart
   /// try {
-  ///   ...
+  ///   // ...
   /// } catch (e, stacktrace) {
   ///   print(stacktrace);
   /// }
@@ -187,6 +182,10 @@ class PlatformException implements Exception {
   /// ```
   ///
   /// In the cases described above, the content of [stacktrace] will be the unprocessed output of calling `toString()` on the exception.
+  ///
+  /// MacOS, iOS, Linux and Windows don't support querying the native stacktrace.
+  ///
+  /// On custom Flutter embedders this value will be null on platforms that don't support querying the call stack.
   final String? stacktrace;
 
   @override

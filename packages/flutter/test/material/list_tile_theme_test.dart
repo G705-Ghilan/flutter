@@ -7,10 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../rendering/mock_canvas.dart';
-
 class TestIcon extends StatefulWidget {
-  const TestIcon({ super.key });
+  const TestIcon({super.key});
 
   @override
   TestIconState createState() => TestIconState();
@@ -27,7 +25,7 @@ class TestIconState extends State<TestIcon> {
 }
 
 class TestText extends StatefulWidget {
-  const TestText(this.text, { super.key });
+  const TestText(this.text, {super.key});
 
   final String text;
 
@@ -46,44 +44,56 @@ class TestTextState extends State<TestText> {
 }
 
 void main() {
-  test('ListTileThemeData copyWith, ==, hashCode basics', () {
+  test('ListTileThemeData copyWith, ==, hashCode, basics', () {
     expect(const ListTileThemeData(), const ListTileThemeData().copyWith());
     expect(const ListTileThemeData().hashCode, const ListTileThemeData().copyWith().hashCode);
   });
 
+  test('ListTileThemeData lerp special cases', () {
+    expect(ListTileThemeData.lerp(null, null, 0), null);
+    const data = ListTileThemeData();
+    expect(identical(ListTileThemeData.lerp(data, data, 0.5), data), true);
+  });
+
   test('ListTileThemeData defaults', () {
-    const ListTileThemeData themeData = ListTileThemeData();
+    const themeData = ListTileThemeData();
     expect(themeData.dense, null);
     expect(themeData.shape, null);
     expect(themeData.style, null);
     expect(themeData.selectedColor, null);
     expect(themeData.iconColor, null);
     expect(themeData.textColor, null);
+    expect(themeData.titleTextStyle, null);
+    expect(themeData.subtitleTextStyle, null);
+    expect(themeData.leadingAndTrailingTextStyle, null);
     expect(themeData.contentPadding, null);
     expect(themeData.tileColor, null);
     expect(themeData.selectedTileColor, null);
     expect(themeData.horizontalTitleGap, null);
     expect(themeData.minVerticalPadding, null);
     expect(themeData.minLeadingWidth, null);
+    expect(themeData.minTileHeight, null);
     expect(themeData.enableFeedback, null);
     expect(themeData.mouseCursor, null);
     expect(themeData.visualDensity, null);
+    expect(themeData.titleAlignment, null);
+    expect(themeData.isThreeLine, null);
   });
 
   testWidgets('Default ListTileThemeData debugFillProperties', (WidgetTester tester) async {
-    final DiagnosticPropertiesBuilder builder = DiagnosticPropertiesBuilder();
+    final builder = DiagnosticPropertiesBuilder();
     const ListTileThemeData().debugFillProperties(builder);
 
     final List<String> description = builder.properties
-      .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
-      .map((DiagnosticsNode node) => node.toString())
-      .toList();
+        .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
+        .map((DiagnosticsNode node) => node.toString())
+        .toList();
 
     expect(description, <String>[]);
   });
 
   testWidgets('ListTileThemeData implements debugFillProperties', (WidgetTester tester) async {
-    final DiagnosticPropertiesBuilder builder = DiagnosticPropertiesBuilder();
+    final builder = DiagnosticPropertiesBuilder();
     const ListTileThemeData(
       dense: true,
       shape: StadiumBorder(),
@@ -91,39 +101,53 @@ void main() {
       selectedColor: Color(0x00000001),
       iconColor: Color(0x00000002),
       textColor: Color(0x00000003),
+      titleTextStyle: TextStyle(color: Color(0x00000004)),
+      subtitleTextStyle: TextStyle(color: Color(0x00000005)),
+      leadingAndTrailingTextStyle: TextStyle(color: Color(0x00000006)),
       contentPadding: EdgeInsets.all(100),
-      tileColor: Color(0x00000004),
-      selectedTileColor: Color(0x00000005),
+      tileColor: Color(0x00000007),
+      selectedTileColor: Color(0x00000008),
       horizontalTitleGap: 200,
       minVerticalPadding: 300,
       minLeadingWidth: 400,
+      minTileHeight: 30,
       enableFeedback: true,
-      mouseCursor: MaterialStateMouseCursor.clickable,
+      mouseCursor: WidgetStateMouseCursor.clickable,
       visualDensity: VisualDensity.comfortable,
+      titleAlignment: ListTileTitleAlignment.top,
+      isThreeLine: true,
     ).debugFillProperties(builder);
 
     final List<String> description = builder.properties
-      .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
-      .map((DiagnosticsNode node) => node.toString())
-      .toList();
+        .where((DiagnosticsNode node) => !node.isFiltered(DiagnosticLevel.info))
+        .map((DiagnosticsNode node) => node.toString())
+        .toList();
 
-    expect(description[0], 'dense: true');
-    expect(description[1], 'shape: StadiumBorder(BorderSide(Color(0xff000000), 0.0, BorderStyle.none))');
-    expect(description[2], 'style: drawer');
-    expect(description[3], 'selectedColor: Color(0x00000001)');
-    expect(description[4], 'iconColor: Color(0x00000002)');
-    expect(description[5], 'textColor: Color(0x00000003)');
-    expect(description[6], 'contentPadding: EdgeInsets.all(100.0)');
-    expect(description[7], 'tileColor: Color(0x00000004)');
-    expect(description[8], 'selectedTileColor: Color(0x00000005)');
-    expect(description[9], 'horizontalTitleGap: 200.0');
-    expect(description[10], 'minVerticalPadding: 300.0');
-    expect(description[11], 'minLeadingWidth: 400.0');
-    expect(description[12], 'enableFeedback: true');
-    expect(description[13], 'mouseCursor: MaterialStateMouseCursor(clickable)');
     expect(
-      description[14],
-      equalsIgnoringHashCodes('visualDensity: VisualDensity#00000(h: -1.0, v: -1.0)(horizontal: -1.0, vertical: -1.0)'),
+      description,
+      equalsIgnoringHashCodes(<String>[
+        'dense: true',
+        'shape: StadiumBorder(BorderSide(width: 0.0, style: none))',
+        'style: drawer',
+        'selectedColor: ${const Color(0x00000001)}',
+        'iconColor: ${const Color(0x00000002)}',
+        'textColor: ${const Color(0x00000003)}',
+        'titleTextStyle: TextStyle(inherit: true, color: ${const Color(0x00000004)})',
+        'subtitleTextStyle: TextStyle(inherit: true, color: ${const Color(0x00000005)})',
+        'leadingAndTrailingTextStyle: TextStyle(inherit: true, color: ${const Color(0x00000006)})',
+        'contentPadding: EdgeInsets.all(100.0)',
+        'tileColor: ${const Color(0x00000007)}',
+        'selectedTileColor: ${const Color(0x00000008)}',
+        'horizontalTitleGap: 200.0',
+        'minVerticalPadding: 300.0',
+        'minLeadingWidth: 400.0',
+        'minTileHeight: 30.0',
+        'enableFeedback: true',
+        'mouseCursor: WidgetStateMouseCursor(clickable)',
+        'visualDensity: VisualDensity#00000(h: -1.0, v: -1.0)(horizontal: -1.0, vertical: -1.0)',
+        'titleAlignment: ListTileTitleAlignment.top',
+        'isThreeLine: true',
+      ]),
     );
   });
 
@@ -147,7 +171,7 @@ void main() {
             minVerticalPadding: 300,
             minLeadingWidth: 400,
             enableFeedback: true,
-            mouseCursor: MaterialStateMouseCursor.clickable,
+            mouseCursor: WidgetStateMouseCursor.clickable,
             child: Center(
               child: Builder(
                 builder: (BuildContext context) {
@@ -174,7 +198,7 @@ void main() {
     expect(theme.minVerticalPadding, 300);
     expect(theme.minLeadingWidth, 400);
     expect(theme.enableFeedback, true);
-    expect(theme.mouseCursor, MaterialStateMouseCursor.clickable);
+    expect(theme.mouseCursor, WidgetStateMouseCursor.clickable);
   });
 
   testWidgets('ListTileTheme', (WidgetTester tester) async {
@@ -195,6 +219,7 @@ void main() {
       Color? textColor,
     }) {
       return MaterialApp(
+        theme: ThemeData(useMaterial3: false),
         home: Material(
           child: Center(
             child: ListTileTheme(
@@ -204,14 +229,16 @@ void main() {
                 selectedColor: selectedColor,
                 iconColor: iconColor,
                 textColor: textColor,
-                mouseCursor: MaterialStateProperty.resolveWith((Set<MaterialState> states) {
-                  if (states.contains(MaterialState.disabled)) {
+                minVerticalPadding: 25.0,
+                mouseCursor: WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+                  if (states.contains(WidgetState.disabled)) {
                     return SystemMouseCursors.forbidden;
                   }
 
                   return SystemMouseCursors.click;
                 }),
                 visualDensity: VisualDensity.compact,
+                titleAlignment: ListTileTitleAlignment.bottom,
               ),
               child: Builder(
                 builder: (BuildContext context) {
@@ -233,15 +260,17 @@ void main() {
       );
     }
 
-    const Color green = Color(0xFF00FF00);
-    const Color red = Color(0xFFFF0000);
+    const green = Color(0xFF00FF00);
+    const red = Color(0xFFFF0000);
     const ShapeBorder roundedShape = RoundedRectangleBorder(
       borderRadius: BorderRadius.all(Radius.circular(4.0)),
     );
 
     Color iconColor(Key key) => tester.state<TestIconState>(find.byKey(key)).iconTheme.color!;
     Color textColor(Key key) => tester.state<TestTextState>(find.byKey(key)).textStyle.color!;
-    ShapeBorder inkWellBorder() => tester.widget<InkWell>(find.descendant(of: find.byType(ListTile), matching: find.byType(InkWell))).customBorder!;
+    ShapeBorder inkWellBorder() => tester
+        .widget<InkWell>(find.descendant(of: find.byType(ListTile), matching: find.byType(InkWell)))
+        .customBorder!;
 
     // A selected ListTile's leading, trailing, and text get the primary color by default
     await tester.pumpWidget(buildFrame(selected: true));
@@ -296,14 +325,26 @@ void main() {
     await gesture.addPointer();
     await gesture.moveTo(listTile);
     await tester.pumpAndSettle();
-    expect(RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1), SystemMouseCursors.forbidden);
+    expect(
+      RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1),
+      SystemMouseCursors.forbidden,
+    );
 
     // VisualDensity is respected
     final RenderBox box = tester.renderObject(find.byKey(listTileKey));
-    expect(box.size, equals(const Size(800, 64.0)));
+    expect(box.size, equals(const Size(800, 80.0)));
+
+    // titleAlignment is respected.
+    final Offset titleOffset = tester.getTopLeft(find.text('title'));
+    final Offset leadingOffset = tester.getTopLeft(find.byKey(leadingKey));
+    final Offset trailingOffset = tester.getTopRight(find.byKey(trailingKey));
+    expect(leadingOffset.dy - titleOffset.dy, 6);
+    expect(trailingOffset.dy - titleOffset.dy, 6);
   });
 
-  testWidgets('ListTileTheme colors are applied to leading and trailing text widgets', (WidgetTester tester) async {
+  testWidgets('ListTileTheme colors are applied to leading and trailing text widgets', (
+    WidgetTester tester,
+  ) async {
     final Key leadingKey = UniqueKey();
     final Key trailingKey = UniqueKey();
 
@@ -311,18 +352,12 @@ void main() {
     const Color defaultColor = Colors.black;
 
     late ThemeData theme;
-    Widget buildFrame({
-      bool enabled = true,
-      bool selected = false,
-    }) {
+    Widget buildFrame({bool enabled = true, bool selected = false}) {
       return MaterialApp(
         home: Material(
           child: Center(
             child: ListTileTheme(
-              data: const ListTileThemeData(
-                selectedColor: selectedColor,
-                textColor: defaultColor,
-              ),
+              data: const ListTileThemeData(selectedColor: selectedColor, textColor: defaultColor),
               child: Builder(
                 builder: (BuildContext context) {
                   theme = Theme.of(context);
@@ -363,9 +398,285 @@ void main() {
     expect(textColor(trailingKey), theme.disabledColor);
   });
 
-  testWidgets("ListTile respects ListTileTheme's tileColor & selectedTileColor", (WidgetTester tester) async {
+  testWidgets(
+    "Material3 - ListTile respects ListTileTheme's titleTextStyle, subtitleTextStyle & leadingAndTrailingTextStyle",
+    (WidgetTester tester) async {
+      const titleTextStyle = TextStyle(
+        fontSize: 23.0,
+        color: Color(0xffff0000),
+        fontStyle: FontStyle.italic,
+      );
+      const subtitleTextStyle = TextStyle(
+        fontSize: 20.0,
+        color: Color(0xff00ff00),
+        fontStyle: FontStyle.italic,
+      );
+      const leadingAndTrailingTextStyle = TextStyle(
+        fontSize: 18.0,
+        color: Color(0xff0000ff),
+        fontStyle: FontStyle.italic,
+      );
+
+      final theme = ThemeData(
+        listTileTheme: const ListTileThemeData(
+          titleTextStyle: titleTextStyle,
+          subtitleTextStyle: subtitleTextStyle,
+          leadingAndTrailingTextStyle: leadingAndTrailingTextStyle,
+        ),
+      );
+
+      Widget buildFrame() {
+        return MaterialApp(
+          theme: theme,
+          home: Material(
+            child: Center(
+              child: Builder(
+                builder: (BuildContext context) {
+                  return const ListTile(
+                    leading: TestText('leading'),
+                    title: TestText('title'),
+                    subtitle: TestText('subtitle'),
+                    trailing: TestText('trailing'),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(buildFrame());
+      final RenderParagraph leading = _getTextRenderObject(tester, 'leading');
+      expect(leading.text.style!.fontSize, leadingAndTrailingTextStyle.fontSize);
+      expect(leading.text.style!.color, leadingAndTrailingTextStyle.color);
+      expect(leading.text.style!.fontStyle, leadingAndTrailingTextStyle.fontStyle);
+      final RenderParagraph title = _getTextRenderObject(tester, 'title');
+      expect(title.text.style!.fontSize, titleTextStyle.fontSize);
+      expect(title.text.style!.color, titleTextStyle.color);
+      expect(title.text.style!.fontStyle, titleTextStyle.fontStyle);
+      final RenderParagraph subtitle = _getTextRenderObject(tester, 'subtitle');
+      expect(subtitle.text.style!.fontSize, subtitleTextStyle.fontSize);
+      expect(subtitle.text.style!.color, subtitleTextStyle.color);
+      expect(subtitle.text.style!.fontStyle, subtitleTextStyle.fontStyle);
+      final RenderParagraph trailing = _getTextRenderObject(tester, 'trailing');
+      expect(trailing.text.style!.fontSize, leadingAndTrailingTextStyle.fontSize);
+      expect(trailing.text.style!.color, leadingAndTrailingTextStyle.color);
+      expect(trailing.text.style!.fontStyle, leadingAndTrailingTextStyle.fontStyle);
+    },
+  );
+
+  testWidgets(
+    "Material2 - ListTile respects ListTileTheme's titleTextStyle, subtitleTextStyle & leadingAndTrailingTextStyle",
+    (WidgetTester tester) async {
+      const titleTextStyle = TextStyle(
+        fontSize: 23.0,
+        color: Color(0xffff0000),
+        fontStyle: FontStyle.italic,
+      );
+      const subtitleTextStyle = TextStyle(
+        fontSize: 20.0,
+        color: Color(0xff00ff00),
+        fontStyle: FontStyle.italic,
+      );
+      const leadingAndTrailingTextStyle = TextStyle(
+        fontSize: 18.0,
+        color: Color(0xff0000ff),
+        fontStyle: FontStyle.italic,
+      );
+
+      final theme = ThemeData(
+        useMaterial3: false,
+        listTileTheme: const ListTileThemeData(
+          titleTextStyle: titleTextStyle,
+          subtitleTextStyle: subtitleTextStyle,
+          leadingAndTrailingTextStyle: leadingAndTrailingTextStyle,
+        ),
+      );
+
+      Widget buildFrame() {
+        return MaterialApp(
+          theme: theme,
+          home: Material(
+            child: Center(
+              child: Builder(
+                builder: (BuildContext context) {
+                  return const ListTile(
+                    leading: TestText('leading'),
+                    title: TestText('title'),
+                    subtitle: TestText('subtitle'),
+                    trailing: TestText('trailing'),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(buildFrame());
+      final RenderParagraph leading = _getTextRenderObject(tester, 'leading');
+      expect(leading.text.style!.fontSize, leadingAndTrailingTextStyle.fontSize);
+      expect(leading.text.style!.color, leadingAndTrailingTextStyle.color);
+      expect(leading.text.style!.fontStyle, leadingAndTrailingTextStyle.fontStyle);
+      final RenderParagraph title = _getTextRenderObject(tester, 'title');
+      expect(title.text.style!.fontSize, titleTextStyle.fontSize);
+      expect(title.text.style!.color, titleTextStyle.color);
+      expect(title.text.style!.fontStyle, titleTextStyle.fontStyle);
+      final RenderParagraph subtitle = _getTextRenderObject(tester, 'subtitle');
+      expect(subtitle.text.style!.fontSize, subtitleTextStyle.fontSize);
+      expect(subtitle.text.style!.color, subtitleTextStyle.color);
+      expect(subtitle.text.style!.fontStyle, subtitleTextStyle.fontStyle);
+      final RenderParagraph trailing = _getTextRenderObject(tester, 'trailing');
+      expect(trailing.text.style!.fontSize, leadingAndTrailingTextStyle.fontSize);
+      expect(trailing.text.style!.color, leadingAndTrailingTextStyle.color);
+      expect(trailing.text.style!.fontStyle, leadingAndTrailingTextStyle.fontStyle);
+    },
+  );
+
+  testWidgets(
+    "Material3 - ListTile's titleTextStyle, subtitleTextStyle & leadingAndTrailingTextStyle are overridden by ListTile properties",
+    (WidgetTester tester) async {
+      final theme = ThemeData(
+        listTileTheme: const ListTileThemeData(
+          titleTextStyle: TextStyle(fontSize: 20.0),
+          subtitleTextStyle: TextStyle(fontSize: 17.5),
+          leadingAndTrailingTextStyle: TextStyle(fontSize: 15.0),
+        ),
+      );
+      const titleTextStyle = TextStyle(
+        fontSize: 23.0,
+        color: Color(0xffff0000),
+        fontStyle: FontStyle.italic,
+      );
+      const subtitleTextStyle = TextStyle(
+        fontSize: 20.0,
+        color: Color(0xff00ff00),
+        fontStyle: FontStyle.italic,
+      );
+      const leadingAndTrailingTextStyle = TextStyle(
+        fontSize: 18.0,
+        color: Color(0xff0000ff),
+        fontStyle: FontStyle.italic,
+      );
+
+      Widget buildFrame() {
+        return MaterialApp(
+          theme: theme,
+          home: Material(
+            child: Center(
+              child: Builder(
+                builder: (BuildContext context) {
+                  return const ListTile(
+                    titleTextStyle: titleTextStyle,
+                    subtitleTextStyle: subtitleTextStyle,
+                    leadingAndTrailingTextStyle: leadingAndTrailingTextStyle,
+                    leading: TestText('leading'),
+                    title: TestText('title'),
+                    subtitle: TestText('subtitle'),
+                    trailing: TestText('trailing'),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(buildFrame());
+      final RenderParagraph leading = _getTextRenderObject(tester, 'leading');
+      expect(leading.text.style!.fontSize, leadingAndTrailingTextStyle.fontSize);
+      expect(leading.text.style!.color, leadingAndTrailingTextStyle.color);
+      expect(leading.text.style!.fontStyle, leadingAndTrailingTextStyle.fontStyle);
+      final RenderParagraph title = _getTextRenderObject(tester, 'title');
+      expect(title.text.style!.fontSize, titleTextStyle.fontSize);
+      expect(title.text.style!.color, titleTextStyle.color);
+      expect(title.text.style!.fontStyle, titleTextStyle.fontStyle);
+      final RenderParagraph subtitle = _getTextRenderObject(tester, 'subtitle');
+      expect(subtitle.text.style!.fontSize, subtitleTextStyle.fontSize);
+      expect(subtitle.text.style!.color, subtitleTextStyle.color);
+      expect(subtitle.text.style!.fontStyle, subtitleTextStyle.fontStyle);
+      final RenderParagraph trailing = _getTextRenderObject(tester, 'trailing');
+      expect(trailing.text.style!.fontSize, leadingAndTrailingTextStyle.fontSize);
+      expect(trailing.text.style!.color, leadingAndTrailingTextStyle.color);
+      expect(trailing.text.style!.fontStyle, leadingAndTrailingTextStyle.fontStyle);
+    },
+  );
+
+  testWidgets(
+    "Material2 - ListTile's titleTextStyle, subtitleTextStyle & leadingAndTrailingTextStyle are overridden by ListTile properties",
+    (WidgetTester tester) async {
+      final theme = ThemeData(
+        useMaterial3: false,
+        listTileTheme: const ListTileThemeData(
+          titleTextStyle: TextStyle(fontSize: 20.0),
+          subtitleTextStyle: TextStyle(fontSize: 17.5),
+          leadingAndTrailingTextStyle: TextStyle(fontSize: 15.0),
+        ),
+      );
+      const titleTextStyle = TextStyle(
+        fontSize: 23.0,
+        color: Color(0xffff0000),
+        fontStyle: FontStyle.italic,
+      );
+      const subtitleTextStyle = TextStyle(
+        fontSize: 20.0,
+        color: Color(0xff00ff00),
+        fontStyle: FontStyle.italic,
+      );
+      const leadingAndTrailingTextStyle = TextStyle(
+        fontSize: 18.0,
+        color: Color(0xff0000ff),
+        fontStyle: FontStyle.italic,
+      );
+
+      Widget buildFrame() {
+        return MaterialApp(
+          theme: theme,
+          home: Material(
+            child: Center(
+              child: Builder(
+                builder: (BuildContext context) {
+                  return const ListTile(
+                    titleTextStyle: titleTextStyle,
+                    subtitleTextStyle: subtitleTextStyle,
+                    leadingAndTrailingTextStyle: leadingAndTrailingTextStyle,
+                    leading: TestText('leading'),
+                    title: TestText('title'),
+                    subtitle: TestText('subtitle'),
+                    trailing: TestText('trailing'),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(buildFrame());
+      final RenderParagraph leading = _getTextRenderObject(tester, 'leading');
+      expect(leading.text.style!.fontSize, leadingAndTrailingTextStyle.fontSize);
+      expect(leading.text.style!.color, leadingAndTrailingTextStyle.color);
+      expect(leading.text.style!.fontStyle, leadingAndTrailingTextStyle.fontStyle);
+      final RenderParagraph title = _getTextRenderObject(tester, 'title');
+      expect(title.text.style!.fontSize, titleTextStyle.fontSize);
+      expect(title.text.style!.color, titleTextStyle.color);
+      expect(title.text.style!.fontStyle, titleTextStyle.fontStyle);
+      final RenderParagraph subtitle = _getTextRenderObject(tester, 'subtitle');
+      expect(subtitle.text.style!.fontSize, subtitleTextStyle.fontSize);
+      expect(subtitle.text.style!.color, subtitleTextStyle.color);
+      expect(subtitle.text.style!.fontStyle, subtitleTextStyle.fontStyle);
+      final RenderParagraph trailing = _getTextRenderObject(tester, 'trailing');
+      expect(trailing.text.style!.fontSize, leadingAndTrailingTextStyle.fontSize);
+      expect(trailing.text.style!.color, leadingAndTrailingTextStyle.color);
+      expect(trailing.text.style!.fontStyle, leadingAndTrailingTextStyle.fontStyle);
+    },
+  );
+
+  testWidgets("ListTile respects ListTileTheme's tileColor & selectedTileColor", (
+    WidgetTester tester,
+  ) async {
     late ListTileThemeData theme;
-    bool isSelected = false;
+    var isSelected = false;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -382,7 +693,7 @@ void main() {
                   return ListTile(
                     selected: isSelected,
                     onTap: () {
-                      setState(()=> isSelected = !isSelected);
+                      setState(() => isSelected = !isSelected);
                     },
                     title: const Text('Title'),
                   );
@@ -394,54 +705,612 @@ void main() {
       ),
     );
 
-    expect(find.byType(Material), paints..path(color: theme.tileColor));
+    expect(find.byType(Material), paints..rect(color: theme.tileColor));
 
     // Tap on tile to change isSelected.
     await tester.tap(find.byType(ListTile));
     await tester.pumpAndSettle();
 
-    expect(find.byType(Material), paints..path(color: theme.selectedTileColor));
+    expect(find.byType(Material), paints..rect(color: theme.selectedTileColor));
   });
 
-  testWidgets("ListTileTheme's tileColor & selectedTileColor are overridden by ListTile properties", (WidgetTester tester) async {
-    bool isSelected = false;
-    final Color tileColor = Colors.green.shade500;
-    final Color selectedTileColor = Colors.red.shade500;
+  testWidgets(
+    "ListTileTheme's tileColor & selectedTileColor are overridden by ListTile properties",
+    (WidgetTester tester) async {
+      var isSelected = false;
+      final Color tileColor = Colors.green.shade500;
+      final Color selectedTileColor = Colors.red.shade500;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Material(
+            child: ListTileTheme(
+              data: const ListTileThemeData(selectedTileColor: Colors.green, tileColor: Colors.red),
+              child: Center(
+                child: StatefulBuilder(
+                  builder: (BuildContext context, StateSetter setState) {
+                    return ListTile(
+                      tileColor: tileColor,
+                      selectedTileColor: selectedTileColor,
+                      selected: isSelected,
+                      onTap: () {
+                        setState(() => isSelected = !isSelected);
+                      },
+                      title: const Text('Title'),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(Material), paints..rect(color: tileColor));
+
+      // Tap on tile to change isSelected.
+      await tester.tap(find.byType(ListTile));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Material), paints..rect(color: selectedTileColor));
+    },
+  );
+
+  testWidgets('ListTile uses ListTileTheme shape in a drawer', (WidgetTester tester) async {
+    // This is a regression test for https://github.com/flutter/flutter/issues/106303
+
+    final scaffoldKey = GlobalKey<ScaffoldState>();
+    const ShapeBorder shapeBorder = RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(Radius.circular(20.0)),
+    );
 
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(listTileTheme: const ListTileThemeData(shape: shapeBorder)),
+        home: Scaffold(
+          key: scaffoldKey,
+          drawer: const Drawer(child: ListTile()),
+          body: Container(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    scaffoldKey.currentState!.openDrawer();
+    // Start drawer animation.
+    await tester.pump();
+
+    final ShapeBorder? inkWellBorder = tester
+        .widget<InkWell>(find.descendant(of: find.byType(ListTile), matching: find.byType(InkWell)))
+        .customBorder;
+    // Test shape.
+    expect(inkWellBorder, shapeBorder);
+  });
+
+  testWidgets('ListTile respects WidgetStateColor LisTileTheme.textColor', (
+    WidgetTester tester,
+  ) async {
+    var enabled = false;
+    var selected = false;
+    const Color defaultColor = Colors.blue;
+    const Color selectedColor = Colors.green;
+    const Color disabledColor = Colors.red;
+
+    final theme = ThemeData(
+      listTileTheme: ListTileThemeData(
+        textColor: WidgetStateColor.resolveWith((Set<WidgetState> states) {
+          if (states.contains(WidgetState.disabled)) {
+            return disabledColor;
+          }
+          if (states.contains(WidgetState.selected)) {
+            return selectedColor;
+          }
+          return defaultColor;
+        }),
+      ),
+    );
+    Widget buildFrame() {
+      return MaterialApp(
+        theme: theme,
+        home: Material(
+          child: Center(
+            child: Builder(
+              builder: (BuildContext context) {
+                return ListTile(
+                  enabled: enabled,
+                  selected: selected,
+                  title: const TestText('title'),
+                  subtitle: const TestText('subtitle'),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Test disabled state.
+    await tester.pumpWidget(buildFrame());
+    RenderParagraph title = _getTextRenderObject(tester, 'title');
+    expect(title.text.style!.color, disabledColor);
+
+    // Test enabled state.
+    enabled = true;
+    await tester.pumpWidget(buildFrame());
+    await tester.pumpAndSettle();
+    title = _getTextRenderObject(tester, 'title');
+    expect(title.text.style!.color, defaultColor);
+
+    // Test selected state.
+    selected = true;
+    await tester.pumpWidget(buildFrame());
+    await tester.pumpAndSettle();
+    title = _getTextRenderObject(tester, 'title');
+    expect(title.text.style!.color, selectedColor);
+  });
+
+  testWidgets('ListTile respects WidgetStateColor LisTileTheme.iconColor', (
+    WidgetTester tester,
+  ) async {
+    var enabled = false;
+    var selected = false;
+    const Color defaultColor = Colors.blue;
+    const Color selectedColor = Colors.green;
+    const Color disabledColor = Colors.red;
+    final Key leadingKey = UniqueKey();
+
+    final theme = ThemeData(
+      listTileTheme: ListTileThemeData(
+        iconColor: WidgetStateColor.resolveWith((Set<WidgetState> states) {
+          if (states.contains(WidgetState.disabled)) {
+            return disabledColor;
+          }
+          if (states.contains(WidgetState.selected)) {
+            return selectedColor;
+          }
+          return defaultColor;
+        }),
+      ),
+    );
+    Widget buildFrame() {
+      return MaterialApp(
+        theme: theme,
+        home: Material(
+          child: Center(
+            child: Builder(
+              builder: (BuildContext context) {
+                return ListTile(
+                  enabled: enabled,
+                  selected: selected,
+                  leading: TestIcon(key: leadingKey),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    }
+
+    Color iconColor(Key key) => tester.state<TestIconState>(find.byKey(key)).iconTheme.color!;
+
+    // Test disabled state.
+    await tester.pumpWidget(buildFrame());
+    expect(iconColor(leadingKey), disabledColor);
+
+    // Test enabled state.
+    enabled = true;
+    await tester.pumpWidget(buildFrame());
+    await tester.pumpAndSettle();
+    expect(iconColor(leadingKey), defaultColor);
+
+    // Test selected state.
+    selected = true;
+    await tester.pumpWidget(buildFrame());
+    await tester.pumpAndSettle();
+    expect(iconColor(leadingKey), selectedColor);
+  });
+
+  testWidgets('ListTileThemeData copyWith overrides all properties', (WidgetTester tester) async {
+    // This is a regression test for https://github.com/flutter/flutter/issues/119734
+
+    const original = ListTileThemeData(
+      dense: true,
+      shape: StadiumBorder(),
+      style: ListTileStyle.drawer,
+      selectedColor: Color(0x00000001),
+      iconColor: Color(0x00000002),
+      textColor: Color(0x00000003),
+      titleTextStyle: TextStyle(color: Color(0x00000004)),
+      subtitleTextStyle: TextStyle(color: Color(0x00000005)),
+      leadingAndTrailingTextStyle: TextStyle(color: Color(0x00000006)),
+      contentPadding: EdgeInsets.all(100),
+      tileColor: Color(0x00000007),
+      selectedTileColor: Color(0x00000008),
+      horizontalTitleGap: 200,
+      minVerticalPadding: 300,
+      minLeadingWidth: 400,
+      minTileHeight: 30,
+      enableFeedback: true,
+      titleAlignment: ListTileTitleAlignment.bottom,
+      isThreeLine: true,
+    );
+
+    final ListTileThemeData copy = original.copyWith(
+      dense: false,
+      shape: const RoundedRectangleBorder(),
+      style: ListTileStyle.list,
+      selectedColor: const Color(0x00000009),
+      iconColor: const Color(0x0000000A),
+      textColor: const Color(0x0000000B),
+      titleTextStyle: const TextStyle(color: Color(0x0000000C)),
+      subtitleTextStyle: const TextStyle(color: Color(0x0000000D)),
+      leadingAndTrailingTextStyle: const TextStyle(color: Color(0x0000000E)),
+      contentPadding: const EdgeInsets.all(500),
+      tileColor: const Color(0x0000000F),
+      selectedTileColor: const Color(0x00000010),
+      horizontalTitleGap: 600,
+      minVerticalPadding: 700,
+      minLeadingWidth: 800,
+      minTileHeight: 80,
+      enableFeedback: false,
+      titleAlignment: ListTileTitleAlignment.top,
+      isThreeLine: false,
+    );
+
+    expect(copy.dense, false);
+    expect(copy.shape, const RoundedRectangleBorder());
+    expect(copy.style, ListTileStyle.list);
+    expect(copy.selectedColor, const Color(0x00000009));
+    expect(copy.iconColor, const Color(0x0000000A));
+    expect(copy.textColor, const Color(0x0000000B));
+    expect(copy.titleTextStyle, const TextStyle(color: Color(0x0000000C)));
+    expect(copy.subtitleTextStyle, const TextStyle(color: Color(0x0000000D)));
+    expect(copy.leadingAndTrailingTextStyle, const TextStyle(color: Color(0x0000000E)));
+    expect(copy.contentPadding, const EdgeInsets.all(500));
+    expect(copy.tileColor, const Color(0x0000000F));
+    expect(copy.selectedTileColor, const Color(0x00000010));
+    expect(copy.horizontalTitleGap, 600);
+    expect(copy.minVerticalPadding, 700);
+    expect(copy.minLeadingWidth, 800);
+    expect(copy.minTileHeight, 80);
+    expect(copy.enableFeedback, false);
+    expect(copy.titleAlignment, ListTileTitleAlignment.top);
+    expect(copy.isThreeLine, false);
+  });
+
+  testWidgets('ListTileTheme.titleAlignment is overridden by ListTile.titleAlignment', (
+    WidgetTester tester,
+  ) async {
+    final Key leadingKey = GlobalKey();
+    final Key trailingKey = GlobalKey();
+    const titleText = '\nHeadline Text\n';
+    const subtitleText = '\nSupporting Text\n';
+
+    Widget buildFrame({ListTileTitleAlignment? alignment}) {
+      return MaterialApp(
+        theme: ThemeData(
+          listTileTheme: const ListTileThemeData(titleAlignment: ListTileTitleAlignment.center),
+        ),
+        home: Material(
+          child: Center(
+            child: ListTile(
+              titleAlignment: ListTileTitleAlignment.top,
+              leading: SizedBox(key: leadingKey, width: 24.0, height: 24.0),
+              title: const Text(titleText),
+              subtitle: const Text(subtitleText),
+              trailing: SizedBox(key: trailingKey, width: 24.0, height: 24.0),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildFrame());
+    final Offset tileOffset = tester.getTopLeft(find.byType(ListTile));
+    final Offset leadingOffset = tester.getTopLeft(find.byKey(leadingKey));
+    final Offset trailingOffset = tester.getTopRight(find.byKey(trailingKey));
+    expect(leadingOffset.dy - tileOffset.dy, 8.0);
+    expect(trailingOffset.dy - tileOffset.dy, 8.0);
+  });
+
+  testWidgets('ListTileTheme.merge supports all properties', (WidgetTester tester) async {
+    Widget buildFrame() {
+      return MaterialApp(
+        theme: ThemeData(
+          listTileTheme: const ListTileThemeData(
+            dense: true,
+            shape: StadiumBorder(),
+            style: ListTileStyle.drawer,
+            selectedColor: Color(0x00000001),
+            iconColor: Color(0x00000002),
+            textColor: Color(0x00000003),
+            titleTextStyle: TextStyle(color: Color(0x00000004)),
+            subtitleTextStyle: TextStyle(color: Color(0x00000005)),
+            leadingAndTrailingTextStyle: TextStyle(color: Color(0x00000006)),
+            contentPadding: EdgeInsets.all(100),
+            tileColor: Color(0x00000007),
+            selectedTileColor: Color(0x00000008),
+            horizontalTitleGap: 200,
+            minVerticalPadding: 300,
+            minLeadingWidth: 400,
+            minTileHeight: 30,
+            enableFeedback: true,
+            titleAlignment: ListTileTitleAlignment.bottom,
+            mouseCursor: WidgetStateMouseCursor.textable,
+            visualDensity: VisualDensity.comfortable,
+            isThreeLine: true,
+          ),
+        ),
+        home: Material(
+          child: Center(
+            child: Builder(
+              builder: (BuildContext context) {
+                return ListTileTheme.merge(
+                  dense: false,
+                  shape: const RoundedRectangleBorder(),
+                  style: ListTileStyle.list,
+                  selectedColor: const Color(0x00000009),
+                  iconColor: const Color(0x0000000A),
+                  textColor: const Color(0x0000000B),
+                  titleTextStyle: const TextStyle(color: Color(0x0000000C)),
+                  subtitleTextStyle: const TextStyle(color: Color(0x0000000D)),
+                  leadingAndTrailingTextStyle: const TextStyle(color: Color(0x0000000E)),
+                  contentPadding: const EdgeInsets.all(500),
+                  tileColor: const Color(0x0000000F),
+                  selectedTileColor: const Color(0x00000010),
+                  horizontalTitleGap: 600,
+                  minVerticalPadding: 700,
+                  minLeadingWidth: 800,
+                  minTileHeight: 80,
+                  enableFeedback: false,
+                  titleAlignment: ListTileTitleAlignment.top,
+                  mouseCursor: WidgetStateMouseCursor.clickable,
+                  visualDensity: VisualDensity.compact,
+                  isThreeLine: false,
+                  child: const ListTile(),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildFrame());
+    final ListTileThemeData theme = ListTileTheme.of(tester.element(find.byType(ListTile)));
+    expect(theme.dense, false);
+    expect(theme.shape, const RoundedRectangleBorder());
+    expect(theme.style, ListTileStyle.list);
+    expect(theme.selectedColor, const Color(0x00000009));
+    expect(theme.iconColor, const Color(0x0000000A));
+    expect(theme.textColor, const Color(0x0000000B));
+    expect(theme.titleTextStyle, const TextStyle(color: Color(0x0000000C)));
+    expect(theme.subtitleTextStyle, const TextStyle(color: Color(0x0000000D)));
+    expect(theme.leadingAndTrailingTextStyle, const TextStyle(color: Color(0x0000000E)));
+    expect(theme.contentPadding, const EdgeInsets.all(500));
+    expect(theme.tileColor, const Color(0x0000000F));
+    expect(theme.selectedTileColor, const Color(0x00000010));
+    expect(theme.horizontalTitleGap, 600);
+    expect(theme.minVerticalPadding, 700);
+    expect(theme.minLeadingWidth, 800);
+    expect(theme.minTileHeight, 80);
+    expect(theme.enableFeedback, false);
+    expect(theme.titleAlignment, ListTileTitleAlignment.top);
+    expect(theme.mouseCursor, WidgetStateMouseCursor.clickable);
+    expect(theme.visualDensity, VisualDensity.compact);
+    expect(theme.isThreeLine, false);
+  });
+
+  // Regression test for https://github.com/flutter/flutter/issues/165453
+  testWidgets('ListTileThemeData isThreeLine', (WidgetTester tester) async {
+    const double height = 300;
+    const avatarTop = 130.0;
+    const placeholderTop = 138.0;
+
+    Widget buildFrame({bool? isThreeLine}) {
+      return MaterialApp(
+        key: UniqueKey(),
+        theme: isThreeLine != null
+            ? ThemeData(listTileTheme: ListTileThemeData(isThreeLine: isThreeLine))
+            : null,
+        home: Material(
+          child: ListView(
+            children: const <Widget>[
+              ListTile(
+                leading: CircleAvatar(),
+                trailing: SizedBox(height: 24.0, width: 24.0, child: Placeholder()),
+                title: Text('A'),
+                subtitle: Text('A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM'),
+              ),
+              ListTile(
+                leading: CircleAvatar(),
+                trailing: SizedBox(height: 24.0, width: 24.0, child: Placeholder()),
+                title: Text('A'),
+                subtitle: Text('A'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    void expectTwoLine() {
+      expect(
+        tester.getRect(find.byType(ListTile).at(0)),
+        const Rect.fromLTWH(0.0, 0.0, 800.0, height),
+      );
+      expect(
+        tester.getRect(find.byType(CircleAvatar).at(0)),
+        const Rect.fromLTWH(16.0, avatarTop, 40.0, 40.0),
+      );
+      expect(
+        tester.getRect(find.byType(Placeholder).at(0)),
+        const Rect.fromLTWH(800.0 - 24.0 - 24.0, placeholderTop, 24.0, 24.0),
+      );
+      expect(
+        tester.getRect(find.byType(ListTile).at(1)),
+        const Rect.fromLTWH(0.0, height, 800.0, 72.0),
+      );
+      expect(
+        tester.getRect(find.byType(CircleAvatar).at(1)),
+        const Rect.fromLTWH(16.0, height + 16.0, 40.0, 40.0),
+      );
+      expect(
+        tester.getRect(find.byType(Placeholder).at(1)),
+        const Rect.fromLTWH(800.0 - 24.0 - 24.0, height + 24.0, 24.0, 24.0),
+      );
+    }
+
+    void expectThreeLine() {
+      expect(
+        tester.getRect(find.byType(ListTile).at(0)),
+        const Rect.fromLTWH(0.0, 0.0, 800.0, height),
+      );
+      expect(
+        tester.getRect(find.byType(CircleAvatar).at(0)),
+        const Rect.fromLTWH(16.0, 8.0, 40.0, 40.0),
+      );
+      expect(
+        tester.getRect(find.byType(Placeholder).at(0)),
+        const Rect.fromLTWH(800.0 - 24.0 - 24.0, 8.0, 24.0, 24.0),
+      );
+      expect(
+        tester.getRect(find.byType(ListTile).at(1)),
+        const Rect.fromLTWH(0.0, height, 800.0, 88.0),
+      );
+      expect(
+        tester.getRect(find.byType(CircleAvatar).at(1)),
+        const Rect.fromLTWH(16.0, height + 8.0, 40.0, 40.0),
+      );
+      expect(
+        tester.getRect(find.byType(Placeholder).at(1)),
+        const Rect.fromLTWH(800.0 - 24.0 - 24.0, height + 8.0, 24.0, 24.0),
+      );
+    }
+
+    await tester.pumpWidget(buildFrame());
+    expectTwoLine();
+
+    await tester.pumpWidget(buildFrame(isThreeLine: false));
+    expectTwoLine();
+
+    await tester.pumpWidget(buildFrame(isThreeLine: true));
+    expectThreeLine();
+  });
+
+  // Regression test for https://github.com/flutter/flutter/issues/165453
+  testWidgets('ListTileTheme isThreeLine', (WidgetTester tester) async {
+    const double height = 300;
+    const avatarTop = 130.0;
+    const placeholderTop = 138.0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(listTileTheme: const ListTileThemeData(isThreeLine: true)),
         home: Material(
           child: ListTileTheme(
-            data: const ListTileThemeData(
-              selectedTileColor: Colors.green,
-              tileColor: Colors.red,
-            ),
-            child: Center(
-              child: StatefulBuilder(
-                builder: (BuildContext context, StateSetter setState) {
-                  return ListTile(
-                    tileColor: tileColor,
-                    selectedTileColor: selectedTileColor,
-                    selected: isSelected,
-                    onTap: () {
-                      setState(()=> isSelected = !isSelected);
-                    },
-                    title: const Text('Title'),
-                  );
-                },
-              ),
+            data: const ListTileThemeData(isThreeLine: false),
+            child: ListView(
+              children: const <Widget>[
+                ListTile(
+                  leading: CircleAvatar(),
+                  trailing: SizedBox(height: 24.0, width: 24.0, child: Placeholder()),
+                  title: Text('A'),
+                  subtitle: Text('A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM'),
+                ),
+                ListTile(
+                  leading: CircleAvatar(),
+                  trailing: SizedBox(height: 24.0, width: 24.0, child: Placeholder()),
+                  title: Text('A'),
+                  subtitle: Text('A'),
+                ),
+              ],
             ),
           ),
         ),
       ),
     );
 
-    expect(find.byType(Material), paints..path(color: tileColor));
+    expect(
+      tester.getRect(find.byType(ListTile).at(0)),
+      const Rect.fromLTWH(0.0, 0.0, 800.0, height),
+    );
+    expect(
+      tester.getRect(find.byType(CircleAvatar).at(0)),
+      const Rect.fromLTWH(16.0, avatarTop, 40.0, 40.0),
+    );
+    expect(
+      tester.getRect(find.byType(Placeholder).at(0)),
+      const Rect.fromLTWH(800.0 - 24.0 - 24.0, placeholderTop, 24.0, 24.0),
+    );
+    expect(
+      tester.getRect(find.byType(ListTile).at(1)),
+      const Rect.fromLTWH(0.0, height, 800.0, 72.0),
+    );
+    expect(
+      tester.getRect(find.byType(CircleAvatar).at(1)),
+      const Rect.fromLTWH(16.0, height + 16.0, 40.0, 40.0),
+    );
+    expect(
+      tester.getRect(find.byType(Placeholder).at(1)),
+      const Rect.fromLTWH(800.0 - 24.0 - 24.0, height + 24.0, 24.0, 24.0),
+    );
 
-    // Tap on tile to change isSelected.
-    await tester.tap(find.byType(ListTile));
-    await tester.pumpAndSettle();
+    // THREE-LINE
+    await tester.pumpWidget(
+      MaterialApp(
+        key: UniqueKey(),
+        home: Material(
+          child: ListTileTheme(
+            data: const ListTileThemeData(isThreeLine: true),
+            child: ListView(
+              children: const <Widget>[
+                ListTile(
+                  leading: CircleAvatar(),
+                  trailing: SizedBox(height: 24.0, width: 24.0, child: Placeholder()),
+                  title: Text('A'),
+                  subtitle: Text('A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM'),
+                ),
+                ListTile(
+                  leading: CircleAvatar(),
+                  trailing: SizedBox(height: 24.0, width: 24.0, child: Placeholder()),
+                  title: Text('A'),
+                  subtitle: Text('A'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
 
-    expect(find.byType(Material), paints..path(color: selectedTileColor));
+    expect(
+      tester.getRect(find.byType(ListTile).at(0)),
+      const Rect.fromLTWH(0.0, 0.0, 800.0, height),
+    );
+    expect(
+      tester.getRect(find.byType(CircleAvatar).at(0)),
+      const Rect.fromLTWH(16.0, 8.0, 40.0, 40.0),
+    );
+    expect(
+      tester.getRect(find.byType(Placeholder).at(0)),
+      const Rect.fromLTWH(800.0 - 24.0 - 24.0, 8.0, 24.0, 24.0),
+    );
+    expect(
+      tester.getRect(find.byType(ListTile).at(1)),
+      const Rect.fromLTWH(0.0, height, 800.0, 88.0),
+    );
+    expect(
+      tester.getRect(find.byType(CircleAvatar).at(1)),
+      const Rect.fromLTWH(16.0, height + 8.0, 40.0, 40.0),
+    );
+    expect(
+      tester.getRect(find.byType(Placeholder).at(1)),
+      const Rect.fromLTWH(800.0 - 24.0 - 24.0, height + 8.0, 24.0, 24.0),
+    );
   });
+}
+
+RenderParagraph _getTextRenderObject(WidgetTester tester, String text) {
+  return tester.renderObject(find.descendant(of: find.byType(ListTile), matching: find.text(text)));
 }

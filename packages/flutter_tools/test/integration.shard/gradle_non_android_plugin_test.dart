@@ -4,6 +4,7 @@
 
 import 'package:file/file.dart';
 import 'package:file_testing/file_testing.dart';
+import 'package:flutter_tools/src/base/io.dart';
 
 import '../src/common.dart';
 import 'test_utils.dart';
@@ -19,13 +20,7 @@ void main() {
     tryToDelete(tempDir);
   });
 
-  testWithoutContext('Flutter app that depends on a non-Android plugin can still build for Android', () {
-    final String flutterRoot = getFlutterRoot();
-    final String flutterBin = fileSystem.path.join(
-      flutterRoot,
-      'bin',
-      'flutter',
-    );
+  test('Flutter app that depends on a non-Android plugin can still build for Android', () {
     processManager.runSync(<String>[
       flutterBin,
       ...getLocalEngineArguments(),
@@ -44,9 +39,9 @@ void main() {
     final File pubspecFile = projectRoot.childFile('pubspec.yaml');
     final String pubspecString = pubspecFile.readAsStringSync();
 
-    final StringBuffer iosOnlyPubspec = StringBuffer();
-    bool inAndroidSection = false;
-    const String pluginPlatformIndentation = '      ';
+    final iosOnlyPubspec = StringBuffer();
+    var inAndroidSection = false;
+    const pluginPlatformIndentation = '      ';
     for (final String line in pubspecString.split('\n')) {
       // Skip everything in the Android section of the plugin platforms list.
       if (line.startsWith('${pluginPlatformIndentation}android:')) {
@@ -68,7 +63,7 @@ void main() {
     // Build example APK
     final Directory exampleDir = projectRoot.childDirectory('example');
 
-    processManager.runSync(<String>[
+    final ProcessResult result = processManager.runSync(<String>[
       flutterBin,
       ...getLocalEngineArguments(),
       'build',
@@ -77,6 +72,8 @@ void main() {
       'android-arm',
       '--verbose',
     ], workingDirectory: exampleDir.path);
+
+    expect(result, const ProcessResultMatcher());
 
     final String exampleAppApk = fileSystem.path.join(
       exampleDir.path,

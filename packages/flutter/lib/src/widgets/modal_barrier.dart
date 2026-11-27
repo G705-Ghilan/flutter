@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'routes.dart';
+library;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
@@ -13,6 +16,96 @@ import 'framework.dart';
 import 'gesture_detector.dart';
 import 'navigator.dart';
 import 'transitions.dart';
+
+/// A widget that modifies the size of the [SemanticsNode.rect] created by its
+/// child widget.
+///
+/// It clips the focus in potentially four directions based on the
+/// specified [EdgeInsets].
+///
+/// The size of the accessibility focus is adjusted based on value changes
+/// inside the given [ValueNotifier].
+///
+/// See also:
+///
+///  * [ModalBarrier], which utilizes this widget to adjust the barrier focus
+/// size based on the size of the content layer rendered on top of it.
+class _SemanticsClipper extends SingleChildRenderObjectWidget {
+  /// creates a [_SemanticsClipper] that updates the size of the
+  /// [SemanticsNode.rect] of its child based on the value inside the provided
+  /// [ValueNotifier], or a default value of [EdgeInsets.zero].
+  const _SemanticsClipper({super.child, required this.clipDetailsNotifier});
+
+  /// The [ValueNotifier] whose value determines how the child's
+  /// [SemanticsNode.rect] should be clipped in four directions.
+  final ValueNotifier<EdgeInsets> clipDetailsNotifier;
+
+  @override
+  _RenderSemanticsClipper createRenderObject(BuildContext context) {
+    return _RenderSemanticsClipper(clipDetailsNotifier: clipDetailsNotifier);
+  }
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderSemanticsClipper renderObject) {
+    renderObject.clipDetailsNotifier = clipDetailsNotifier;
+  }
+}
+
+/// Updates the [SemanticsNode.rect] of its child based on the value inside
+/// provided [ValueNotifier].
+class _RenderSemanticsClipper extends RenderProxyBox {
+  /// Creates a [RenderProxyBox] that Updates the [SemanticsNode.rect] of its child
+  /// based on the value inside provided [ValueNotifier].
+  _RenderSemanticsClipper({required this._clipDetailsNotifier, RenderBox? child}) : super(child);
+
+  ValueNotifier<EdgeInsets> _clipDetailsNotifier;
+
+  /// The getter and setter retrieves / updates the [ValueNotifier] associated
+  /// with this clipper.
+  ValueNotifier<EdgeInsets> get clipDetailsNotifier => _clipDetailsNotifier;
+  set clipDetailsNotifier(ValueNotifier<EdgeInsets> newNotifier) {
+    if (_clipDetailsNotifier == newNotifier) {
+      return;
+    }
+    if (attached) {
+      _clipDetailsNotifier.removeListener(markNeedsSemanticsUpdate);
+    }
+    _clipDetailsNotifier = newNotifier;
+    _clipDetailsNotifier.addListener(markNeedsSemanticsUpdate);
+    markNeedsSemanticsUpdate();
+  }
+
+  @override
+  Rect get semanticBounds {
+    final EdgeInsets clipDetails = _clipDetailsNotifier.value;
+    final Rect originalRect = super.semanticBounds;
+    final clippedRect = Rect.fromLTRB(
+      originalRect.left + clipDetails.left,
+      originalRect.top + clipDetails.top,
+      originalRect.right - clipDetails.right,
+      originalRect.bottom - clipDetails.bottom,
+    );
+    return clippedRect;
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    clipDetailsNotifier.addListener(markNeedsSemanticsUpdate);
+  }
+
+  @override
+  void detach() {
+    clipDetailsNotifier.removeListener(markNeedsSemanticsUpdate);
+    super.detach();
+  }
+
+  @override
+  void describeSemanticsConfiguration(SemanticsConfiguration config) {
+    super.describeSemanticsConfiguration(config);
+    config.isSemanticBoundary = true;
+  }
+}
 
 /// A widget that prevents the user from interacting with widgets behind itself.
 ///
@@ -37,6 +130,8 @@ class ModalBarrier extends StatelessWidget {
     this.onDismiss,
     this.semanticsLabel,
     this.barrierSemanticsDismissible = true,
+    this.clipDetailsNotifier,
+    this.semanticsOnTapHint,
   });
 
   /// If non-null, fill the barrier with this color.
@@ -91,25 +186,37 @@ class ModalBarrier extends StatelessWidget {
   ///    [ModalBarrier] built by [ModalRoute] pages.
   final String? semanticsLabel;
 
+  /// {@template flutter.widgets.ModalBarrier.clipDetailsNotifier}
+  /// Contains a value of type [EdgeInsets] that specifies how the
+  /// [SemanticsNode.rect] of the widget should be clipped.
+  ///
+  /// See also:
+  ///
+  ///  * [_SemanticsClipper], which utilizes the value inside to update the
+  /// [SemanticsNode.rect] for its child.
+  /// {@endtemplate}
+  final ValueNotifier<EdgeInsets>? clipDetailsNotifier;
+
+  /// {@macro flutter.material.ModalBottomSheetRoute.barrierOnTapHint}
+  final String? semanticsOnTapHint;
+
   @override
   Widget build(BuildContext context) {
     assert(!dismissible || semanticsLabel == null || debugCheckHasDirectionality(context));
     final bool platformSupportsDismissingBarrier;
     switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
       case TargetPlatform.fuchsia:
       case TargetPlatform.linux:
       case TargetPlatform.windows:
         platformSupportsDismissingBarrier = false;
-        break;
+      case TargetPlatform.android:
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
         platformSupportsDismissingBarrier = true;
-        break;
     }
-    assert(platformSupportsDismissingBarrier != null);
     final bool semanticsDismissible = dismissible && platformSupportsDismissingBarrier;
-    final bool modalBarrierSemanticsDismissible = barrierSemanticsDismissible ?? semanticsDismissible;
+    final bool modalBarrierSemanticsDismissible =
+        barrierSemanticsDismissible ?? semanticsDismissible;
 
     void handleDismiss() {
       if (dismissible) {
@@ -123,28 +230,37 @@ class ModalBarrier extends StatelessWidget {
       }
     }
 
+    Widget barrier = Semantics(
+      onTapHint: semanticsOnTapHint,
+      onTap: semanticsDismissible && semanticsLabel != null ? handleDismiss : null,
+      onDismiss: semanticsDismissible && semanticsLabel != null ? handleDismiss : null,
+      label: semanticsDismissible ? semanticsLabel : null,
+      textDirection: semanticsDismissible && semanticsLabel != null
+          ? Directionality.of(context)
+          : null,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.basic,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints.expand(),
+          child: color == null ? null : ColoredBox(color: color!),
+        ),
+      ),
+    );
+
+    // Developers can set [dismissible: true] and [barrierSemanticsDismissible: true]
+    // to allow assistive technology users to dismiss a modal BottomSheet by
+    // tapping on the Scrim focus.
+    // On iOS, some modal barriers are not dismissible in accessibility mode.
+    final bool excluding = !semanticsDismissible || !modalBarrierSemanticsDismissible;
+
+    if (!excluding && clipDetailsNotifier != null) {
+      barrier = _SemanticsClipper(clipDetailsNotifier: clipDetailsNotifier!, child: barrier);
+    }
+
     return BlockSemantics(
       child: ExcludeSemantics(
-        // On Android, the back button is used to dismiss a modal. On iOS, some
-        // modal barriers are not dismissible in accessibility mode.
-        excluding: !semanticsDismissible || !modalBarrierSemanticsDismissible,
-        child: _ModalBarrierGestureDetector(
-          onDismiss: handleDismiss,
-          child: Semantics(
-            label: semanticsDismissible ? semanticsLabel : null,
-            onDismiss: semanticsDismissible ? handleDismiss : null,
-            textDirection: semanticsDismissible && semanticsLabel != null ? Directionality.of(context) : null,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.basic,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints.expand(),
-                child: color == null ? null : ColoredBox(
-                  color: color!,
-                ),
-              ),
-            ),
-          ),
-        ),
+        excluding: excluding,
+        child: _ModalBarrierGestureDetector(onDismiss: handleDismiss, child: barrier),
       ),
     );
   }
@@ -175,6 +291,8 @@ class AnimatedModalBarrier extends AnimatedWidget {
     this.semanticsLabel,
     this.barrierSemanticsDismissible,
     this.onDismiss,
+    this.clipDetailsNotifier,
+    this.semanticsOnTapHint,
   }) : super(listenable: color);
 
   /// If non-null, fill the barrier with this color.
@@ -214,6 +332,19 @@ class AnimatedModalBarrier extends AnimatedWidget {
   /// {@macro flutter.widgets.ModalBarrier.onDismiss}
   final VoidCallback? onDismiss;
 
+  /// {@macro flutter.widgets.ModalBarrier.clipDetailsNotifier}
+  final ValueNotifier<EdgeInsets>? clipDetailsNotifier;
+
+  /// This hint text instructs users what they are able to do when they tap on
+  /// the [ModalBarrier]
+  ///
+  /// E.g. If the hint text is 'close bottom sheet", it will be announced as
+  /// "Double tap to close bottom sheet".
+  ///
+  /// If this value is null, the default onTapHint will be applied, resulting
+  /// in the announcement of 'Double tap to activate'.
+  final String? semanticsOnTapHint;
+
   @override
   Widget build(BuildContext context) {
     return ModalBarrier(
@@ -222,6 +353,8 @@ class AnimatedModalBarrier extends AnimatedWidget {
       semanticsLabel: semanticsLabel,
       barrierSemanticsDismissible: barrierSemanticsDismissible,
       onDismiss: onDismiss,
+      clipDetailsNotifier: clipDetailsNotifier,
+      semanticsOnTapHint: semanticsOnTapHint,
     );
   }
 }
@@ -253,7 +386,9 @@ class _AnyTapGestureRecognizer extends BaseTapGestureRecognizer {
   @protected
   @override
   void handleTapUp({PointerDownEvent? down, PointerUpEvent? up}) {
-    onAnyTapUp?.call();
+    if (onAnyTapUp != null) {
+      invokeCallback('onAnyTapUp', onAnyTapUp!);
+    }
   }
 
   @protected
@@ -264,17 +399,6 @@ class _AnyTapGestureRecognizer extends BaseTapGestureRecognizer {
 
   @override
   String get debugDescription => 'any tap';
-}
-
-class _ModalBarrierSemanticsDelegate extends SemanticsGestureDelegate {
-  const _ModalBarrierSemanticsDelegate({this.onDismiss});
-
-  final VoidCallback? onDismiss;
-
-  @override
-  void assignSemantics(RenderSemanticsGestureHandler renderObject) {
-    renderObject.onTap = onDismiss;
-  }
 }
 
 class _AnyTapGestureRecognizerFactory extends GestureRecognizerFactory<_AnyTapGestureRecognizer> {
@@ -294,11 +418,7 @@ class _AnyTapGestureRecognizerFactory extends GestureRecognizerFactory<_AnyTapGe
 // A GestureDetector used by ModalBarrier. It only has one callback,
 // [onAnyTapDown], which recognizes tap down unconditionally.
 class _ModalBarrierGestureDetector extends StatelessWidget {
-  const _ModalBarrierGestureDetector({
-    required this.child,
-    required this.onDismiss,
-  }) : assert(child != null),
-       assert(onDismiss != null);
+  const _ModalBarrierGestureDetector({required this.child, required this.onDismiss});
 
   /// The widget below this widget in the tree.
   /// See [RawGestureDetector.child].
@@ -310,15 +430,10 @@ class _ModalBarrierGestureDetector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Map<Type, GestureRecognizerFactory> gestures = <Type, GestureRecognizerFactory>{
+    final gestures = <Type, GestureRecognizerFactory>{
       _AnyTapGestureRecognizer: _AnyTapGestureRecognizerFactory(onAnyTapUp: onDismiss),
     };
 
-    return RawGestureDetector(
-      gestures: gestures,
-      behavior: HitTestBehavior.opaque,
-      semantics: _ModalBarrierSemanticsDelegate(onDismiss: onDismiss),
-      child: child,
-    );
+    return RawGestureDetector(gestures: gestures, behavior: HitTestBehavior.opaque, child: child);
   }
 }

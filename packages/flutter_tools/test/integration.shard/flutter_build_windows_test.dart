@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:ffi' show Abi;
 import 'dart:io' as io;
 
 import 'package:file/file.dart';
@@ -14,50 +15,48 @@ import 'test_utils.dart';
 void main() {
   late Directory tempDir;
   late Directory projectRoot;
-  late String flutterBin;
   late Directory releaseDir;
   late File exeFile;
 
   group('flutter build windows command', () {
     setUpAll(() {
       tempDir = createResolvedTempDirectorySync('build_windows_test.');
-      flutterBin = fileSystem.path.join(
-        getFlutterRoot(),
-        'bin',
-        'flutter',
-      );
-      processManager.runSync(<String>[flutterBin, 'config',
+      ProcessResult result = processManager.runSync(<String>[
+        flutterBin,
+        'config',
         '--enable-windows-desktop',
       ]);
+      expect(result, const ProcessResultMatcher());
 
-      processManager.runSync(<String>[
+      result = processManager.runSync(<String>[
         flutterBin,
         ...getLocalEngineArguments(),
         'create',
         'hello',
       ], workingDirectory: tempDir.path);
+      expect(result, const ProcessResultMatcher());
 
       projectRoot = tempDir.childDirectory('hello');
 
-      releaseDir = fileSystem.directory(fileSystem.path.join(
-        projectRoot.path,
-        'build',
-        'windows',
-        'runner',
-        'Release',
-      ));
+      final String arch;
+      if (Abi.current() == Abi.windowsArm64) {
+        arch = 'arm64';
+      } else {
+        arch = 'x64';
+      }
 
-      exeFile = fileSystem.file(fileSystem.path.join(
-        releaseDir.path,
-        'hello.exe',
-      ));
+      releaseDir = fileSystem.directory(
+        fileSystem.path.join(projectRoot.path, 'build', 'windows', arch, 'runner', 'Release'),
+      );
+
+      exeFile = fileSystem.file(fileSystem.path.join(releaseDir.path, 'hello.exe'));
     });
 
     tearDownAll(() {
       tryToDelete(tempDir);
     });
 
-    testWithoutContext('flutter build windows creates exe', () {
+    test('flutter build windows creates exe', () {
       final ProcessResult result = processManager.runSync(<String>[
         flutterBin,
         ...getLocalEngineArguments(),
@@ -65,8 +64,8 @@ void main() {
         'windows',
         '--no-pub',
       ], workingDirectory: projectRoot.path);
+      expect(result, const ProcessResultMatcher());
 
-      expect(result.exitCode, 0);
       expect(releaseDir, exists);
       expect(exeFile, exists);
 
@@ -78,8 +77,8 @@ void main() {
       expect(productVersion, equals('1.0.0+1'));
     });
 
-    testWithoutContext('flutter build windows sets build name', () {
-      processManager.runSync(<String>[
+    test('flutter build windows sets build name', () {
+      final ProcessResult result = processManager.runSync(<String>[
         flutterBin,
         ...getLocalEngineArguments(),
         'build',
@@ -88,6 +87,7 @@ void main() {
         '--build-name',
         '1.2.3',
       ], workingDirectory: projectRoot.path);
+      expect(result, const ProcessResultMatcher());
 
       final String fileVersion = _getFileVersion(exeFile);
       final String productVersion = _getProductVersion(exeFile);
@@ -96,8 +96,8 @@ void main() {
       expect(productVersion, equals('1.2.3'));
     });
 
-    testWithoutContext('flutter build windows sets build name and build number', () {
-      processManager.runSync(<String>[
+    test('flutter build windows sets build name and build number', () {
+      final ProcessResult result = processManager.runSync(<String>[
         flutterBin,
         ...getLocalEngineArguments(),
         'build',
@@ -108,6 +108,7 @@ void main() {
         '--build-number',
         '4',
       ], workingDirectory: projectRoot.path);
+      expect(result, const ProcessResultMatcher());
 
       final String fileVersion = _getFileVersion(exeFile);
       final String productVersion = _getProductVersion(exeFile);
@@ -126,29 +127,25 @@ String _getFileVersion(File file) {
     '\$v = [System.Diagnostics.FileVersionInfo]::GetVersionInfo(\\"${file.path}\\"); '
     r'Write-Output \"$($v.FileMajorPart).$($v.FileMinorPart).$($v.FileBuildPart).$($v.FilePrivatePart)\" '
     '"',
-    <String>[]
+    <String>[],
   );
 
-  if (result.exitCode != 0) {
-    throw Exception('GetVersionInfo failed.');
-  }
+  expect(result, const ProcessResultMatcher());
 
   // Trim trailing new line.
-  final String output = result.stdout as String;
+  final output = result.stdout as String;
   return output.trim();
 }
 
 String _getProductVersion(File file) {
   final ProcessResult result = Process.runSync(
     'powershell.exe -command "[System.Diagnostics.FileVersionInfo]::GetVersionInfo(\\"${file.path}\\").ProductVersion"',
-    <String>[]
+    <String>[],
   );
 
-  if (result.exitCode != 0) {
-    throw Exception('GetVersionInfo failed.');
-  }
+  expect(result, const ProcessResultMatcher());
 
   // Trim trailing new line.
-  final String output = result.stdout as String;
+  final output = result.stdout as String;
   return output.trim();
 }

@@ -5,6 +5,8 @@
 import '../../artifacts.dart';
 import '../../base/file_system.dart';
 import '../../build_info.dart';
+import '../../devfs.dart';
+import '../../isolated/native_assets/dart_hook_result.dart';
 import '../build_system.dart';
 import '../depfile.dart';
 import '../exceptions.dart';
@@ -12,9 +14,10 @@ import 'assets.dart';
 import 'common.dart';
 import 'desktop.dart';
 import 'icon_tree_shaker.dart';
+import 'native_assets.dart';
 
 /// The only files/subdirectories we care about.
-const List<String> _kWindowsArtifacts = <String>[
+const _kWindowsArtifacts = <String>[
   'flutter_windows.dll',
   'flutter_windows.dll.exp',
   'flutter_windows.dll.lib',
@@ -26,18 +29,22 @@ const List<String> _kWindowsArtifacts = <String>[
   'flutter_windows.h',
 ];
 
-const String _kWindowsDepfile = 'windows_engine_sources.d';
+const _kWindowsDepfile = 'windows_engine_sources.d';
 
 /// Copies the Windows desktop embedding files to the copy directory.
 class UnpackWindows extends Target {
-  const UnpackWindows();
+  const UnpackWindows(this.targetPlatform);
+
+  final TargetPlatform targetPlatform;
 
   @override
   String get name => 'unpack_windows';
 
   @override
   List<Source> get inputs => const <Source>[
-    Source.pattern('{FLUTTER_ROOT}/packages/flutter_tools/lib/src/build_system/targets/windows.dart'),
+    Source.pattern(
+      '{FLUTTER_ROOT}/packages/flutter_tools/lib/src/build_system/targets/windows.dart',
+    ),
   ];
 
   @override
@@ -55,19 +62,17 @@ class UnpackWindows extends Target {
     if (buildModeEnvironment == null) {
       throw MissingDefineException(kBuildMode, name);
     }
-    final BuildMode buildMode = getBuildModeForName(buildModeEnvironment);
-    final String engineSourcePath = environment.artifacts
-      .getArtifactPath(
-        Artifact.windowsDesktopPath,
-        platform: TargetPlatform.windows_x64,
-        mode: buildMode,
-      );
-    final String clientSourcePath = environment.artifacts
-      .getArtifactPath(
-        Artifact.windowsCppClientWrapper,
-        platform: TargetPlatform.windows_x64,
-        mode: buildMode,
-      );
+    final buildMode = BuildMode.fromCliName(buildModeEnvironment);
+    final String engineSourcePath = environment.artifacts.getArtifactPath(
+      Artifact.windowsDesktopPath,
+      platform: targetPlatform,
+      mode: buildMode,
+    );
+    final String clientSourcePath = environment.artifacts.getArtifactPath(
+      Artifact.windowsCppClientWrapper,
+      platform: targetPlatform,
+      mode: buildMode,
+    );
     final Directory outputDirectory = environment.fileSystem.directory(
       environment.fileSystem.path.join(
         environment.projectDir.path,
@@ -84,14 +89,10 @@ class UnpackWindows extends Target {
       clientSourcePaths: <String>[clientSourcePath],
       icuDataPath: environment.artifacts.getArtifactPath(
         Artifact.icuData,
-        platform: TargetPlatform.windows_x64
-      )
+        platform: targetPlatform,
+      ),
     );
-    final DepfileService depfileService = DepfileService(
-      fileSystem: environment.fileSystem,
-      logger: environment.logger,
-    );
-    depfileService.writeToFile(
+    environment.depFileService.writeToFile(
       depfile,
       environment.buildDir.childFile(_kWindowsDepfile),
     );
@@ -100,25 +101,30 @@ class UnpackWindows extends Target {
 
 /// Creates a bundle for the Windows desktop target.
 abstract class BundleWindowsAssets extends Target {
-  const BundleWindowsAssets();
+  const BundleWindowsAssets(this.targetPlatform);
+
+  final TargetPlatform targetPlatform;
 
   @override
-  List<Target> get dependencies => const <Target>[
-    KernelSnapshot(),
-    UnpackWindows(),
+  List<Target> get dependencies => <Target>[
+    const LinkHooks(),
+    const KernelSnapshot(),
+    const InstallCodeAssets(),
+    UnpackWindows(targetPlatform),
   ];
 
   @override
   List<Source> get inputs => const <Source>[
-    Source.pattern('{FLUTTER_ROOT}/packages/flutter_tools/lib/src/build_system/targets/windows.dart'),
+    Source.pattern(
+      '{FLUTTER_ROOT}/packages/flutter_tools/lib/src/build_system/targets/windows.dart',
+    ),
+    Source.pattern('{BUILD_DIR}/${LinkHooks.resultFilename}'),
     Source.pattern('{PROJECT_DIR}/pubspec.yaml'),
     ...IconTreeShaker.inputs,
   ];
 
   @override
-  List<String> get depfiles => const <String>[
-    'flutter_assets.d',
-  ];
+  List<String> get depfiles => const <String>['flutter_assets.d'];
 
   @override
   Future<void> build(Environment environment) async {
@@ -126,28 +132,33 @@ abstract class BundleWindowsAssets extends Target {
     if (buildModeEnvironment == null) {
       throw MissingDefineException(kBuildMode, 'bundle_windows_assets');
     }
-    final BuildMode buildMode = getBuildModeForName(buildModeEnvironment);
-    final Directory outputDirectory = environment.outputDir
-      .childDirectory('flutter_assets');
+    final buildMode = BuildMode.fromCliName(buildModeEnvironment);
+    final Directory outputDirectory = environment.outputDir.childDirectory('flutter_assets');
     if (!outputDirectory.existsSync()) {
       outputDirectory.createSync();
     }
 
     // Only copy the kernel blob in debug mode.
     if (buildMode == BuildMode.debug) {
-      environment.buildDir.childFile('app.dill')
-        .copySync(outputDirectory.childFile('kernel_blob.bin').path);
+      environment.buildDir
+          .childFile('app.dill')
+          .copySync(outputDirectory.childFile('kernel_blob.bin').path);
     }
+    final DartHooksResult dartHookResult = await LinkHooks.loadHookResult(environment);
     final Depfile depfile = await copyAssets(
       environment,
       outputDirectory,
-      targetPlatform: TargetPlatform.windows_x64,
+      dartHookResult: dartHookResult,
+      targetPlatform: targetPlatform,
+      buildMode: buildMode,
+      flavor: environment.defines[kFlavor],
+      additionalContent: <String, DevFSContent>{
+        'NativeAssetsManifest.json': DevFSFileContent(
+          environment.buildDir.childFile('native_assets.json'),
+        ),
+      },
     );
-    final DepfileService depfileService = DepfileService(
-      fileSystem: environment.fileSystem,
-      logger: environment.logger,
-    );
-    depfileService.writeToFile(
+    environment.depFileService.writeToFile(
       depfile,
       environment.buildDir.childFile('flutter_assets.d'),
     );
@@ -159,27 +170,20 @@ class WindowsAotBundle extends Target {
   /// Create a [WindowsAotBundle] wrapper for [aotTarget].
   const WindowsAotBundle(this.aotTarget);
 
-  /// The [AotElfBase] subclass that produces the app.so.
-  final AotElfBase aotTarget;
+  /// The [AotSnapshotBase] subclass that produces the Windows AOT library.
+  final AotSnapshotBase aotTarget;
 
   @override
   String get name => 'windows_aot_bundle';
 
   @override
-  List<Source> get inputs => const <Source>[
-    Source.pattern('{BUILD_DIR}/app.so'),
-  ];
+  List<Source> get inputs => const <Source>[Source.pattern('{BUILD_DIR}/app.so')];
 
   @override
-  List<Source> get outputs =>
-    const <Source>[
-      Source.pattern('{OUTPUT_DIR}/windows/app.so'),
-    ];
+  List<Source> get outputs => const <Source>[Source.pattern('{OUTPUT_DIR}/windows/app.so')];
 
   @override
-  List<Target> get dependencies => <Target>[
-    aotTarget,
-  ];
+  List<Target> get dependencies => <Target>[aotTarget];
 
   @override
   Future<void> build(Environment environment) async {
@@ -193,10 +197,10 @@ class WindowsAotBundle extends Target {
 }
 
 class ReleaseBundleWindowsAssets extends BundleWindowsAssets {
-  const ReleaseBundleWindowsAssets();
+  const ReleaseBundleWindowsAssets(super.targetPlatform);
 
   @override
-  String get name => 'release_bundle_windows_assets';
+  String get name => 'release_bundle_${targetPlatform.getName()}_assets';
 
   @override
   List<Source> get outputs => const <Source>[];
@@ -204,15 +208,15 @@ class ReleaseBundleWindowsAssets extends BundleWindowsAssets {
   @override
   List<Target> get dependencies => <Target>[
     ...super.dependencies,
-    const WindowsAotBundle(AotElfRelease(TargetPlatform.windows_x64)),
+    WindowsAotBundle(AotSnapshotRelease(targetPlatform)),
   ];
 }
 
 class ProfileBundleWindowsAssets extends BundleWindowsAssets {
-  const ProfileBundleWindowsAssets();
+  const ProfileBundleWindowsAssets(super.targetPlatform);
 
   @override
-  String get name => 'profile_bundle_windows_assets';
+  String get name => 'profile_bundle_${targetPlatform.getName()}_assets';
 
   @override
   List<Source> get outputs => const <Source>[];
@@ -220,20 +224,18 @@ class ProfileBundleWindowsAssets extends BundleWindowsAssets {
   @override
   List<Target> get dependencies => <Target>[
     ...super.dependencies,
-    const WindowsAotBundle(AotElfProfile(TargetPlatform.windows_x64)),
+    WindowsAotBundle(AotSnapshotProfile(targetPlatform)),
   ];
 }
 
 class DebugBundleWindowsAssets extends BundleWindowsAssets {
-  const DebugBundleWindowsAssets();
+  const DebugBundleWindowsAssets(super.targetPlatform);
 
   @override
-  String get name => 'debug_bundle_windows_assets';
+  String get name => 'debug_bundle_${targetPlatform.getName()}_assets';
 
   @override
-  List<Source> get inputs => <Source>[
-    const Source.pattern('{BUILD_DIR}/app.dill'),
-  ];
+  List<Source> get inputs => <Source>[const Source.pattern('{BUILD_DIR}/app.dill')];
 
   @override
   List<Source> get outputs => <Source>[

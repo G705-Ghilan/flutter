@@ -4,51 +4,110 @@
 
 import 'dart:io';
 
+import 'token_logger.dart';
+
+/// Base class for code generation templates.
 abstract class TokenTemplate {
-  const TokenTemplate(this.fileName, this.tokens, {
+  const TokenTemplate(
+    this.blockName,
+    this.fileName,
+    this._tokens, {
     this.colorSchemePrefix = 'Theme.of(context).colorScheme.',
-    this.textThemePrefix = 'Theme.of(context).textTheme.'
+    this.textThemePrefix = 'Theme.of(context).textTheme.',
   });
+
+  /// Name of the code block that this template will generate.
+  ///
+  /// Used to identify an existing block when updating it.
+  final String blockName;
+
+  /// Name of the file that will be updated with the generated code.
+  final String fileName;
+
+  /// Map of token data extracted from the Material Design token database.
+  final Map<String, dynamic> _tokens;
+
+  /// Optional prefix prepended to color definitions.
+  ///
+  /// Defaults to 'Theme.of(context).colorScheme.'
+  final String colorSchemePrefix;
+
+  /// Optional prefix prepended to text style definitions.
+  ///
+  /// Defaults to 'Theme.of(context).textTheme.'
+  final String textThemePrefix;
+
+  /// Check if a token is available.
+  bool tokenAvailable(String tokenName) => _tokens.containsKey(tokenName);
+
+  /// Resolve a token while logging its usage.
+  /// There will be no log if [optional] is true and the token doesn't exist.
+  dynamic getToken(String tokenName, {bool optional = false}) {
+    if (optional && !tokenAvailable(tokenName)) {
+      return null;
+    }
+    tokenLogger.log(tokenName);
+    return _tokens[tokenName];
+  }
 
   static const String beginGeneratedComment = '''
 
-// BEGIN GENERATED TOKEN PROPERTIES
-''';
+// BEGIN GENERATED TOKEN PROPERTIES''';
 
   static const String headerComment = '''
 
-// Generated code to the end of this file. Do not edit by hand.
-// These defaults are generated from the Material Design Token
-// database by the script dev/tools/gen_defaults/bin/gen_defaults.dart.
+// Do not edit by hand. The code between the "BEGIN GENERATED" and
+// "END GENERATED" comments are generated from data in the Material
+// Design token database by the script:
+//   dev/tools/gen_defaults/bin/gen_defaults.dart.
 
+// dart format off
+''';
+
+  // TODO(goderbauer): Update the script to output auto-formatted code and remove
+  //  "dart format off/on" from headerComment and footerComment.
+  static const String footerComment = '''
+// dart format on
 ''';
 
   static const String endGeneratedComment = '''
 
-// END GENERATED TOKEN PROPERTIES
-''';
-
-  final String fileName;
-  final Map<String, dynamic> tokens;
-  final String colorSchemePrefix;
-  final String textThemePrefix;
+// END GENERATED TOKEN PROPERTIES''';
 
   /// Replace or append the contents of the file with the text from [generate].
   ///
-  /// If the file already contains generated block at the end, it will
-  /// be replaced by the [generate] output. Otherwise the content will
-  /// just be appended to the end of the file.
-  Future<void> updateFile() async {
-    String contents = File(fileName).readAsStringSync();
-    final int previousGeneratedIndex = contents.indexOf(beginGeneratedComment);
-    if (previousGeneratedIndex != -1) {
-      contents = contents.substring(0, previousGeneratedIndex);
+  /// If the file already contains a generated text block matching the
+  /// [blockName], it will be replaced by the [generate] output. Otherwise
+  /// the content will just be appended to the end of the file.
+  void updateFile() {
+    final String contents = File(fileName).readAsStringSync();
+    final beginComment = '$beginGeneratedComment - $blockName\n';
+    final endComment = '$endGeneratedComment - $blockName\n';
+    final int beginPreviousBlock = contents.indexOf(beginComment);
+    final int endPreviousBlock = contents.indexOf(endComment);
+    late String contentBeforeBlock;
+    late String contentAfterBlock;
+    if (beginPreviousBlock != -1) {
+      if (endPreviousBlock < beginPreviousBlock) {
+        print('Unable to find block named $blockName in $fileName, skipping code generation.');
+        return;
+      }
+      // Found a valid block matching the name, so record the content before and after.
+      contentBeforeBlock = contents.substring(0, beginPreviousBlock);
+      contentAfterBlock = contents.substring(endPreviousBlock + endComment.length);
+    } else {
+      // Just append to the bottom.
+      contentBeforeBlock = contents;
+      contentAfterBlock = '';
     }
-    final StringBuffer buffer = StringBuffer(contents);
-    buffer.write(beginGeneratedComment);
+
+    final buffer = StringBuffer(contentBeforeBlock);
+    buffer.write(beginComment);
     buffer.write(headerComment);
     buffer.write(generate());
-    buffer.write(endGeneratedComment);
+    buffer.write(footerComment);
+    buffer.write(endComment);
+    buffer.write(contentAfterBlock);
     File(fileName).writeAsStringSync(buffer.toString());
   }
 
@@ -59,22 +118,37 @@ abstract class TokenTemplate {
   /// bottom of the file.
   String generate();
 
-  /// Generate a [ColorScheme] color name for the given token.
+  /// Generate a `ColorScheme` color name for the given token.
   ///
   /// If there is a value for the given token, this will return
   /// the value prepended with [colorSchemePrefix].
   ///
-  /// Otherwise it will return 'null'.
+  /// Otherwise it will return [defaultValue] if provided or 'null' if not.
+  ///
+  /// If a [defaultValue] is not provided and the token doesn't exist, the token
+  /// lookup is logged and a warning will be shown at the end of the process.
   ///
   /// See also:
   ///   * [componentColor], that provides support for an optional opacity.
-  String color(String colorToken) {
-    return tokens.containsKey(colorToken)
-      ? '$colorSchemePrefix${tokens[colorToken]}'
-      : 'null';
+  String color(String colorToken, [String? defaultValue]) {
+    final String effectiveDefault = defaultValue ?? 'null';
+    final dynamic tokenVal = getToken(colorToken, optional: defaultValue != null);
+    return tokenVal == null ? effectiveDefault : '$colorSchemePrefix$tokenVal';
   }
 
-  /// Generate a [ColorScheme] color name for the given component's color
+  /// Generate a `ColorScheme` color name for the given token or a transparent
+  /// color if there is no value for the token.
+  ///
+  /// If there is a value for the given token, this will return
+  /// the value prepended with [colorSchemePrefix].
+  ///
+  /// Otherwise it will return 'Colors.transparent'.
+  ///
+  /// See also:
+  ///   * [componentColor], that provides support for an optional opacity.
+  String? colorOrTransparent(String token) => color(token, 'Colors.transparent');
+
+  /// Generate a `ColorScheme` color name for the given component's color
   /// with opacity if available.
   ///
   /// If there is a value for the given component's color, this will return
@@ -87,12 +161,13 @@ abstract class TokenTemplate {
   /// See also:
   ///   * [color], that provides support for looking up a raw color token.
   String componentColor(String componentToken) {
-    final String colorToken = '$componentToken.color';
-    if (!tokens.containsKey(colorToken))
+    final colorToken = '$componentToken.color';
+    if (!tokenAvailable(colorToken)) {
       return 'null';
+    }
     String value = color(colorToken);
-    final String opacityToken = '$componentToken.opacity';
-    if (tokens.containsKey(opacityToken)) {
+    final opacityToken = '$componentToken.opacity';
+    if (tokenAvailable(opacityToken)) {
       value += '.withOpacity(${opacity(opacityToken)})';
     }
     return value;
@@ -100,55 +175,115 @@ abstract class TokenTemplate {
 
   /// Generate the opacity value for the given token.
   String? opacity(String token) {
-    final dynamic value = tokens[token];
-    if (value == null) {
-      return null;
-    }
-    if (value is double) {
-      return value.toString();
-    }
-    return tokens[value].toString();
+    tokenLogger.log(token);
+    return _numToString(getToken(token));
+  }
+
+  String? _numToString(Object? value, [int? digits]) {
+    return switch (value) {
+      null => null,
+      double.infinity => 'double.infinity',
+      num() when digits == null => value.toString(),
+      num() => value.toStringAsFixed(digits!),
+      _ => getToken(value as String).toString(),
+    };
   }
 
   /// Generate an elevation value for the given component token.
   String elevation(String componentToken) {
-    return tokens[tokens['$componentToken.elevation']!]!.toString();
+    return getToken(getToken('$componentToken.elevation')! as String)!.toString();
+  }
+
+  /// Generate a size value for the given component token.
+  ///
+  /// Non-square sizes are specified as width and height.
+  String size(String componentToken) {
+    final sizeToken = '$componentToken.size';
+    if (!tokenAvailable(sizeToken)) {
+      final widthToken = '$componentToken.width';
+      final heightToken = '$componentToken.height';
+      if (!tokenAvailable(widthToken) && !tokenAvailable(heightToken)) {
+        throw Exception('Unable to find width, height, or size tokens for $componentToken');
+      }
+      final String? width = _numToString(
+        tokenAvailable(widthToken) ? getToken(widthToken)! as num : double.infinity,
+        0,
+      );
+      final String? height = _numToString(
+        tokenAvailable(heightToken) ? getToken(heightToken)! as num : double.infinity,
+        0,
+      );
+      return 'const Size($width, $height)';
+    }
+    return 'const Size.square(${_numToString(getToken(sizeToken))})';
   }
 
   /// Generate a shape constant for the given component token.
   ///
   /// Currently supports family:
-  ///   - "SHAPE_FAMILY_ROUNDED_CORNERS" which maps to [RoundedRectangleBorder].
-  ///   - "SHAPE_FAMILY_CIRCULAR" which maps to a [StadiumBorder].
-  String shape(String componentToken) {
-    final Map<String, dynamic> shape = tokens[tokens['$componentToken.shape']!]! as Map<String, dynamic>;
+  ///   - "SHAPE_FAMILY_ROUNDED_CORNERS" which maps to `RoundedRectangleBorder`.
+  ///   - "SHAPE_FAMILY_CIRCULAR" which maps to a `StadiumBorder`.
+  String shape(String componentToken, [String prefix = 'const ']) {
+    final shape = getToken(getToken('$componentToken.shape') as String) as Map<String, dynamic>;
     switch (shape['family']) {
       case 'SHAPE_FAMILY_ROUNDED_CORNERS':
-        return 'const RoundedRectangleBorder(borderRadius: '
+        final topLeft = shape['topLeft'] as double;
+        final topRight = shape['topRight'] as double;
+        final bottomLeft = shape['bottomLeft'] as double;
+        final bottomRight = shape['bottomRight'] as double;
+        if (topLeft == topRight && topLeft == bottomLeft && topLeft == bottomRight) {
+          if (topLeft == 0) {
+            return '${prefix}RoundedRectangleBorder()';
+          }
+          return '${prefix}RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular($topLeft)))';
+        }
+        if (topLeft == topRight && bottomLeft == bottomRight) {
+          return '${prefix}RoundedRectangleBorder(borderRadius: BorderRadius.vertical('
+              '${topLeft > 0 ? 'top: Radius.circular($topLeft)' : ''}'
+              '${topLeft > 0 && bottomLeft > 0 ? ',' : ''}'
+              '${bottomLeft > 0 ? 'bottom: Radius.circular($bottomLeft)' : ''}'
+              '))';
+        }
+        return '${prefix}RoundedRectangleBorder(borderRadius: '
             'BorderRadius.only('
             'topLeft: Radius.circular(${shape['topLeft']}), '
             'topRight: Radius.circular(${shape['topRight']}), '
             'bottomLeft: Radius.circular(${shape['bottomLeft']}), '
             'bottomRight: Radius.circular(${shape['bottomRight']})))';
       case 'SHAPE_FAMILY_CIRCULAR':
-        return 'const StadiumBorder()';
+        return '${prefix}StadiumBorder()';
     }
     print('Unsupported shape family type: ${shape['family']} for $componentToken');
     return '';
   }
 
-  /// Generate a [BorderSide] for the given component.
+  /// Generate a `BorderSide` for the given component.
   String border(String componentToken) {
-    if (!tokens.containsKey('$componentToken.color')) {
+    if (!tokenAvailable('$componentToken.color')) {
       return 'null';
     }
     final String borderColor = componentColor(componentToken);
-    final double width = (tokens['$componentToken.width'] ?? 1.0) as double;
+    final width =
+        (getToken('$componentToken.width', optional: true) ??
+                getToken('$componentToken.height', optional: true) ??
+                1.0)
+            as double;
     return 'BorderSide(color: $borderColor${width != 1.0 ? ", width: $width" : ""})';
   }
 
-  /// Generate a [TextTheme] text style name for the given component token.
+  /// Generate a `TextTheme` text style name for the given component token.
   String textStyle(String componentToken) {
-    return '$textThemePrefix${tokens["$componentToken.text-style"]}';
+    return '$textThemePrefix${getToken("$componentToken.text-style")}';
+  }
+
+  String textStyleWithColor(String componentToken) {
+    if (!tokenAvailable('$componentToken.text-style')) {
+      return 'null';
+    }
+    String style = textStyle(componentToken);
+    if (tokenAvailable('$componentToken.color')) {
+      style = '$style?.copyWith(color: ${componentColor(componentToken)})';
+    }
+    return style;
   }
 }

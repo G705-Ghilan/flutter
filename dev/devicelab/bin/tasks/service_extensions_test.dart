@@ -22,17 +22,22 @@ void main() {
     await device.unlock();
     final Directory appDir = dir(path.join(flutterDirectory.path, 'dev/integration_tests/ui'));
     await inDirectory(appDir, () async {
-      final Completer<void> ready = Completer<void>();
+      final ready = Completer<void>();
       late bool ok;
       print('run: starting...');
-      final Process run = await startProcess(
-        path.join(flutterDirectory.path, 'bin', 'flutter'),
-        <String>['run', '--verbose', '--no-fast-start', '--no-publish-port', '--disable-service-auth-codes', '-d', device.deviceId, 'lib/main.dart'],
+      final Process run = await startFlutter(
+        'run',
+        options: <String>[
+          '--no-publish-port',
+          '--disable-service-auth-codes',
+          '-d',
+          device.deviceId,
+          'lib/main.dart',
+        ],
       );
-      run.stdout
-          .transform<String>(utf8.decoder)
-          .transform<String>(const LineSplitter())
-          .listen((String line) {
+      run.stdout.transform<String>(utf8.decoder).transform<String>(const LineSplitter()).listen((
+        String line,
+      ) {
         print('run:stdout: $line');
         if (vmServicePort == null) {
           vmServicePort = parseServicePort(line);
@@ -44,23 +49,27 @@ void main() {
           }
         }
       });
-      run.stderr
-          .transform<String>(utf8.decoder)
-          .transform<String>(const LineSplitter())
-          .listen((String line) {
+      run.stderr.transform<String>(utf8.decoder).transform<String>(const LineSplitter()).listen((
+        String line,
+      ) {
         stderr.writeln('run:stderr: $line');
       });
-      unawaited(run.exitCode.then<void>((int exitCode) { ok = false; }));
-      await Future.any<dynamic>(<Future<dynamic>>[ ready.future, run.exitCode ]);
-      if (!ok)
+      unawaited(
+        run.exitCode.then<void>((int exitCode) {
+          ok = false;
+        }),
+      );
+      await Future.any<dynamic>(<Future<dynamic>>[ready.future, run.exitCode]);
+      if (!ok) {
         throw 'Failed to run test app.';
+      }
 
       final VmService client = await vmServiceConnectUri('ws://localhost:$vmServicePort/ws');
       final VM vm = await client.getVM();
       final IsolateRef isolate = vm.isolates!.first;
 
-      final StreamController<Event> frameEventsController = StreamController<Event>();
-      final StreamController<Event> navigationEventsController = StreamController<Event>();
+      final frameEventsController = StreamController<Event>();
+      final navigationEventsController = StreamController<Event>();
       try {
         await client.streamListen(EventKind.kExtension);
       } catch (err) {
@@ -100,28 +109,42 @@ void main() {
       expect((event.extensionData!.data['raster'] as int) >= 0);
 
       final Future<Event> navigationFuture = navigationEvents.first;
-      // This tap triggers a navigation event.
-      unawaited(device.tap(100, 200));
+      // Trigger a navigation event by tapping the button via the Flutter Driver extension.
+      final Response tapResponse = await client.callServiceExtension(
+        'ext.flutter.driver',
+        isolateId: isolate.id,
+        args: <String, String>{
+          'command': 'tap',
+          'finderType': 'ByText',
+          'text': 'flutter drive lib/xxx.dart',
+        },
+      );
+      expect(
+        tapResponse.json?['isError'] == false,
+        'Failed to tap button via Flutter Driver. Response: ${tapResponse.json}',
+      );
 
       final Event navigationEvent = await navigationFuture;
       // validate the fields
       expect(navigationEvent.extensionData!.data['route'] is Map<dynamic, dynamic>);
-      final Map<dynamic, dynamic> route = navigationEvent.extensionData!.data['route'] as Map<dynamic, dynamic>;
+      final route = navigationEvent.extensionData!.data['route'] as Map<dynamic, dynamic>;
       expect(route['description'] is String);
       expect(route['settings'] is Map<dynamic, dynamic>);
-      final Map<dynamic, dynamic> settings = route['settings'] as Map<dynamic, dynamic>;
+      final settings = route['settings'] as Map<dynamic, dynamic>;
       expect(settings.containsKey('name'));
 
       run.stdin.write('q');
       final int result = await run.exitCode;
-      if (result != 0)
+      if (result != 0) {
         throw 'Received unexpected exit code $result from run process.';
+      }
     });
     return TaskResult.success(null);
   });
 }
 
-void expect(bool value) {
-  if (!value)
-    throw 'failed assertion in service extensions test';
+void expect(bool value, [String? reason]) {
+  if (!value) {
+    throw reason ?? 'failed assertion in service extensions test';
+  }
 }

@@ -2,8 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'package:flutter/material.dart';
+/// @docImport 'package:flutter_test/flutter_test.dart';
+///
+/// @docImport 'primary_scroll_controller.dart';
+/// @docImport 'scroll_configuration.dart';
+/// @docImport 'scroll_view.dart';
+/// @docImport 'scrollable.dart';
+/// @docImport 'single_child_scroll_view.dart';
+/// @docImport 'viewport.dart';
+library;
+
 import 'dart:math' as math;
 
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 
@@ -21,14 +33,19 @@ import 'scroll_physics.dart';
 import 'scroll_position.dart';
 import 'scroll_position_with_single_context.dart';
 import 'scroll_simulation.dart';
+import 'value_listenable_builder.dart';
 
 /// The signature of a method that provides a [BuildContext] and
 /// [ScrollController] for building a widget that may overflow the draggable
-/// [Axis] of the containing [DraggableScrollableSheet].
+/// [Axis] of the containing area.
 ///
-/// Users should apply the [scrollController] to a [ScrollView] subclass, such
-/// as a [SingleChildScrollView], [ListView] or [GridView], to have the whole
-/// sheet be draggable.
+/// This builder is used when a widget is expected to have a scrollable child
+/// widget, and a vertical gesture needs to trigger scrolling and some other behavior
+/// during that same gesture.
+///
+/// For example, users  of [DraggableScrollableSheet] should apply the [scrollController]
+/// to a [ScrollView] subclass, such as a [SingleChildScrollView], [ListView] or
+/// [GridView], to have the whole sheet be draggable.
 typedef ScrollableWidgetBuilder = Widget Function(
   BuildContext context,
   ScrollController scrollController,
@@ -51,6 +68,13 @@ typedef ScrollableWidgetBuilder = Widget Function(
 /// fire when [pixels] changes without [size] changing. For example, if the
 /// constraints provided to an attached sheet change.
 class DraggableScrollableController extends ChangeNotifier {
+  /// Creates a controller for [DraggableScrollableSheet].
+  DraggableScrollableController() {
+    if (kFlutterMemoryAllocationsEnabled) {
+      ChangeNotifier.maybeDispatchObjectCreation(this);
+    }
+  }
+
   _DraggableScrollableSheetScrollController? _attachedController;
   final Set<AnimationController> _animationControllers = <AnimationController>{};
 
@@ -86,8 +110,8 @@ class DraggableScrollableController extends ChangeNotifier {
     return _attachedController!.extent.pixelsToSize(pixels);
   }
 
-  /// Animates the attached sheet from its current size to [size] to the
-  /// provided new `size`, a fractional value of the parent container's height.
+  /// Animates the attached sheet from its current size to the given [size], a
+  /// fractional value of the parent container's height.
   ///
   /// Any active sheet animation is canceled. If the sheet's internal scrollable
   /// is currently animating (e.g. responding to a user fling), that animation is
@@ -101,18 +125,18 @@ class DraggableScrollableController extends ChangeNotifier {
   /// The duration must not be zero. To jump to a particular value without an
   /// animation, use [jumpTo].
   ///
+  /// The sheet will not snap after calling [animateTo] even if [DraggableScrollableSheet.snap]
+  /// is true. Snapping only occurs after user drags.
+  ///
   /// When calling [animateTo] in widget tests, `await`ing the returned
   /// [Future] may cause the test to hang and timeout. Instead, use
   /// [WidgetTester.pumpAndSettle].
-  Future<void> animateTo(
-    double size, {
-    required Duration duration,
-    required Curve curve,
-  }) async {
+  @awaitNotRequired
+  Future<void> animateTo(double size, {required Duration duration, required Curve curve}) async {
     _assertAttached();
     assert(size >= 0 && size <= 1);
     assert(duration != Duration.zero);
-    final AnimationController animationController = AnimationController.unbounded(
+    final animationController = AnimationController.unbounded(
       vsync: _attachedController!.position.context.vsync,
       value: _attachedController!.extent.currentSize,
     );
@@ -120,24 +144,26 @@ class DraggableScrollableController extends ChangeNotifier {
     _attachedController!.position.goIdle();
     // This disables any snapping until the next user interaction with the sheet.
     _attachedController!.extent.hasDragged = false;
-    _attachedController!.extent.startActivity(onCanceled: () {
-      // Don't stop the controller if it's already finished and may have been disposed.
-      if (animationController.isAnimating) {
-        animationController.stop();
-      }
-    });
+    _attachedController!.extent.hasChanged = true;
+    _attachedController!.extent.startActivity(
+      onCanceled: () {
+        // Don't stop the controller if it's already finished and may have been disposed.
+        if (animationController.isAnimating) {
+          animationController.stop();
+        }
+      },
+    );
     animationController.addListener(() {
       _attachedController!.extent.updateSize(
         animationController.value,
         _attachedController!.position.context.notificationContext!,
       );
-      if (animationController.value > _attachedController!.extent.maxSize ||
-          animationController.value < _attachedController!.extent.minSize) {
-        // Animation hit the max or min size, stop animating.
-        animationController.stop(canceled: false);
-      }
     });
-    await animationController.animateTo(size, duration: duration, curve: curve);
+    await animationController.animateTo(
+      clampDouble(size, _attachedController!.extent.minSize, _attachedController!.extent.maxSize),
+      duration: duration,
+      curve: curve,
+    );
   }
 
   /// Jumps the attached sheet from its current size to the given [size], a
@@ -149,6 +175,9 @@ class DraggableScrollableController extends ChangeNotifier {
   /// Any active sheet animation is canceled. If the sheet's inner scrollable
   /// is currently animating (e.g. responding to a user fling), that animation is
   /// canceled as well.
+  ///
+  /// The sheet will not snap after calling [jumpTo] even if [DraggableScrollableSheet.snap]
+  /// is true. Snapping only occurs after user drags.
   void jumpTo(double size) {
     _assertAttached();
     assert(size >= 0 && size <= 1);
@@ -156,7 +185,11 @@ class DraggableScrollableController extends ChangeNotifier {
     _attachedController!.extent.startActivity(onCanceled: () {});
     _attachedController!.position.goIdle();
     _attachedController!.extent.hasDragged = false;
-    _attachedController!.extent.updateSize(size, _attachedController!.position.context.notificationContext!);
+    _attachedController!.extent.hasChanged = true;
+    _attachedController!.extent.updateSize(
+      size,
+      _attachedController!.position.context.notificationContext!,
+    );
   }
 
   /// Reset the attached sheet to its initial size (see: [DraggableScrollableSheet.initialChildSize]).
@@ -169,12 +202,15 @@ class DraggableScrollableController extends ChangeNotifier {
     assert(
       isAttached,
       'DraggableScrollableController is not attached to a sheet. A DraggableScrollableController '
-        'must be used in a DraggableScrollableSheet before any of its methods are called.',
+      'must be used in a DraggableScrollableSheet before any of its methods are called.',
     );
   }
 
   void _attach(_DraggableScrollableSheetScrollController scrollController) {
-    assert(_attachedController == null, 'Draggable scrollable controller is already attached to a sheet.');
+    assert(
+      _attachedController == null,
+      'Draggable scrollable controller is already attached to a sheet.',
+    );
     _attachedController = scrollController;
     _attachedController!.extent._currentSize.addListener(notifyListeners);
     _attachedController!.onPositionDetached = _disposeAnimationControllers;
@@ -192,8 +228,13 @@ class DraggableScrollableController extends ChangeNotifier {
     }
   }
 
-  void _detach() {
-    _attachedController?.extent._currentSize.removeListener(notifyListeners);
+  void _detach({bool disposeExtent = false}) {
+    if (disposeExtent) {
+      _attachedController?.extent.dispose();
+    } else {
+      _attachedController?.extent._currentSize.removeListener(notifyListeners);
+    }
+    _disposeAnimationControllers();
     _attachedController = null;
   }
 
@@ -231,12 +272,16 @@ class DraggableScrollableController extends ChangeNotifier {
 /// [minChildSize] and [maxChildSize]. Use [snapSizes] to add more sizes for
 /// the sheet to snap between.
 ///
+/// The snapping effect is only applied on user drags. Programmatically
+/// manipulating the sheet size via [DraggableScrollableController.animateTo] or
+/// [DraggableScrollableController.jumpTo] will ignore [snap] and [snapSizes].
+///
 /// By default, the widget will expand its non-occupied area to fill available
 /// space in the parent. If this is not desired, e.g. because the parent wants
 /// to position sheet based on the space it is taking, the [expand] property
 /// may be set to false.
 ///
-/// {@tool snippet}
+/// {@tool dartpad}
 ///
 /// This is a sample widget which shows a [ListView] that has 25 [ListTile]s.
 /// It starts out as taking up half the body of the [Scaffold], and can be
@@ -245,42 +290,19 @@ class DraggableScrollableController extends ChangeNotifier {
 /// scrolled up or down, until they reach the top of the list again and the user
 /// drags the sheet back down.
 ///
-/// ```dart
-/// class HomePage extends StatelessWidget {
-///   const HomePage({super.key});
+/// On desktop and web running on desktop platforms, dragging to scroll with a mouse is disabled by default
+/// to align with the natural behavior found in other desktop applications.
 ///
-///   @override
-///   Widget build(BuildContext context) {
-///     return Scaffold(
-///       appBar: AppBar(
-///         title: const Text('DraggableScrollableSheet'),
-///       ),
-///       body: SizedBox.expand(
-///         child: DraggableScrollableSheet(
-///           builder: (BuildContext context, ScrollController scrollController) {
-///             return Container(
-///               color: Colors.blue[100],
-///               child: ListView.builder(
-///                 controller: scrollController,
-///                 itemCount: 25,
-///                 itemBuilder: (BuildContext context, int index) {
-///                   return ListTile(title: Text('Item $index'));
-///                 },
-///               ),
-///             );
-///           },
-///         ),
-///       ),
-///     );
-///   }
-/// }
-/// ```
+/// This behavior is dictated by the [ScrollBehavior], and can be changed by adding
+/// [PointerDeviceKind.mouse] to [ScrollBehavior.dragDevices].
+/// For more info on this, please refer to https://docs.flutter.dev/release/breaking-changes/default-scroll-behavior-drag
+///
+/// Alternatively, this example illustrates how to add a drag handle for desktop applications.
+///
+/// ** See code in examples/api/lib/widgets/draggable_scrollable_sheet/draggable_scrollable_sheet.0.dart **
 /// {@end-tool}
 class DraggableScrollableSheet extends StatefulWidget {
   /// Creates a widget that can be dragged and scrolled in a single gesture.
-  ///
-  /// The [builder], [initialChildSize], [minChildSize], [maxChildSize] and
-  /// [expand] parameters must not be null.
   const DraggableScrollableSheet({
     super.key,
     this.initialChildSize = 0.5,
@@ -289,22 +311,20 @@ class DraggableScrollableSheet extends StatefulWidget {
     this.expand = true,
     this.snap = false,
     this.snapSizes,
+    this.snapAnimationDuration,
     this.controller,
+    this.shouldCloseOnMinExtent = true,
     required this.builder,
-  })  : assert(initialChildSize != null),
-        assert(minChildSize != null),
-        assert(maxChildSize != null),
-        assert(minChildSize >= 0.0),
-        assert(maxChildSize <= 1.0),
-        assert(minChildSize <= initialChildSize),
-        assert(initialChildSize <= maxChildSize),
-        assert(expand != null),
-        assert(builder != null);
+  }) : assert(minChildSize >= 0.0),
+       assert(maxChildSize <= 1.0),
+       assert(minChildSize <= initialChildSize),
+       assert(initialChildSize <= maxChildSize),
+       assert(snapAnimationDuration == null || snapAnimationDuration > Duration.zero);
 
   /// The initial fractional value of the parent container's height to use when
   /// displaying the widget.
   ///
-  /// Rebuilding the sheet with a new [initialChildSize] will only move the
+  /// Rebuilding the sheet with a new [initialChildSize] will only move
   /// the sheet to the new value if the sheet has not yet been dragged since it
   /// was first built or since the last call to [DraggableScrollableActuator.reset].
   ///
@@ -340,6 +360,9 @@ class DraggableScrollableSheet extends StatefulWidget {
   /// snap to the next snap size (see [snapSizes]) in the direction of the drag.
   /// If their finger was still, the widget will snap to the nearest snap size.
   ///
+  /// Snapping is not applied when the sheet is programmatically moved by
+  /// calling [DraggableScrollableController.animateTo] or [DraggableScrollableController.jumpTo].
+  ///
   /// Rebuilding the sheet with snap newly enabled will immediately trigger a
   /// snap unless the sheet has not yet been dragged away from
   /// [initialChildSize] since first being built or since the last call to
@@ -365,8 +388,21 @@ class DraggableScrollableSheet extends StatefulWidget {
   /// being built or since the last call to [DraggableScrollableActuator.reset].
   final List<double>? snapSizes;
 
+  /// Defines a duration for the snap animations.
+  ///
+  /// If it's not set, then the animation duration is the distance to the snap
+  /// target divided by the velocity of the widget.
+  final Duration? snapAnimationDuration;
+
   /// A controller that can be used to programmatically control this sheet.
   final DraggableScrollableController? controller;
+
+  /// Whether the sheet, when dragged (or flung) to its minimum size, should
+  /// cause its parent sheet to close.
+  ///
+  /// Set on emitted [DraggableScrollableNotification]s. It is up to parent
+  /// classes to properly read and handle this value.
+  final bool shouldCloseOnMinExtent;
 
   /// The builder that creates a child to display in this widget, which will
   /// use the provided [ScrollController] to enable dragging and scrolling
@@ -401,25 +437,21 @@ class DraggableScrollableNotification extends Notification with ViewportNotifica
   /// Creates a notification that the extent of a [DraggableScrollableSheet] has
   /// changed.
   ///
-  /// All parameters are required. The [minExtent] must be >= 0.  The [maxExtent]
-  /// must be <= 1.0.  The [extent] must be between [minExtent] and [maxExtent].
+  /// All parameters are required. The [minExtent] must be >= 0. The [maxExtent]
+  /// must be <= 1.0. The [extent] must be between [minExtent] and [maxExtent].
   DraggableScrollableNotification({
     required this.extent,
     required this.minExtent,
     required this.maxExtent,
     required this.initialExtent,
     required this.context,
-  }) : assert(extent != null),
-       assert(initialExtent != null),
-       assert(minExtent != null),
-       assert(maxExtent != null),
-       assert(0.0 <= minExtent),
+    this.shouldCloseOnMinExtent = true,
+  }) : assert(0.0 <= minExtent),
        assert(maxExtent <= 1.0),
        assert(minExtent <= extent),
        assert(minExtent <= initialExtent),
        assert(extent <= maxExtent),
-       assert(initialExtent <= maxExtent),
-       assert(context != null);
+       assert(initialExtent <= maxExtent);
 
   /// The current value of the extent, between [minExtent] and [maxExtent].
   final double extent;
@@ -440,10 +472,18 @@ class DraggableScrollableNotification extends Notification with ViewportNotifica
   /// is live when it first gets the notification.
   final BuildContext context;
 
+  /// Whether the widget that fired this notification, when dragged (or flung)
+  /// to minExtent, should cause its parent sheet to close.
+  ///
+  /// It is up to parent classes to properly read and handle this value.
+  final bool shouldCloseOnMinExtent;
+
   @override
   void debugFillDescription(List<String> description) {
     super.debugFillDescription(description);
-    description.add('minExtent: $minExtent, extent: $extent, maxExtent: $maxExtent, initialExtent: $initialExtent');
+    description.add(
+      'minExtent: $minExtent, extent: $extent, maxExtent: $maxExtent, initialExtent: $initialExtent',
+    );
   }
 }
 
@@ -465,20 +505,21 @@ class _DraggableSheetExtent {
     required this.snap,
     required this.snapSizes,
     required this.initialSize,
-    required this.onSizeChanged,
+    this.snapAnimationDuration,
     ValueNotifier<double>? currentSize,
     bool? hasDragged,
-  })  : assert(minSize != null),
-        assert(maxSize != null),
-        assert(initialSize != null),
-        assert(minSize >= 0),
-        assert(maxSize <= 1),
-        assert(minSize <= initialSize),
-        assert(initialSize <= maxSize),
-        _currentSize = (currentSize ?? ValueNotifier<double>(initialSize))
-          ..addListener(onSizeChanged),
-        availablePixels = double.infinity,
-        hasDragged = hasDragged ?? false;
+    bool? hasChanged,
+    this.shouldCloseOnMinExtent = true,
+  }) : assert(minSize >= 0),
+       assert(maxSize <= 1),
+       assert(minSize <= initialSize),
+       assert(initialSize <= maxSize),
+       _currentSize = currentSize ?? ValueNotifier<double>(initialSize),
+       availablePixels = double.infinity,
+       hasDragged = hasDragged ?? false,
+       hasChanged = hasChanged ?? false {
+    assert(debugMaybeDispatchCreated('widgets', '_DraggableSheetExtent', this));
+  }
 
   VoidCallback? _cancelActivity;
 
@@ -486,14 +527,25 @@ class _DraggableSheetExtent {
   final double maxSize;
   final bool snap;
   final List<double> snapSizes;
+  final Duration? snapAnimationDuration;
   final double initialSize;
+  final bool shouldCloseOnMinExtent;
   final ValueNotifier<double> _currentSize;
-  final VoidCallback onSizeChanged;
   double availablePixels;
 
-  // Used to disable snapping until the user has dragged on the sheet. We do
-  // this because we don't want to snap away from an initial or programmatically set size.
+  // Used to disable snapping until the user has dragged on the sheet.
   bool hasDragged;
+
+  // Used to determine if the sheet should move to a new initial size when it
+  // changes.
+  // We need both `hasChanged` and `hasDragged` to achieve the following
+  // behavior:
+  //   1. The sheet should only snap following user drags (as opposed to
+  //      programmatic sheet changes). See docs for `animateTo` and `jumpTo`.
+  //   2. The sheet should move to a new initial child size on rebuild iff the
+  //      sheet has not changed, either by drag or programmatic control. See
+  //      docs for `initialChildSize`.
+  bool hasChanged;
 
   bool get isAtMin => minSize >= _currentSize.value;
   bool get isAtMax => maxSize <= _currentSize.value;
@@ -501,15 +553,13 @@ class _DraggableSheetExtent {
   double get currentSize => _currentSize.value;
   double get currentPixels => sizeToPixels(_currentSize.value);
 
-  double get additionalMinSize => isAtMin ? 0.0 : 1.0;
-  double get additionalMaxSize => isAtMax ? 0.0 : 1.0;
   List<double> get pixelSnapSizes => snapSizes.map(sizeToPixels).toList();
 
   /// Start an activity that affects the sheet and register a cancel call back
   /// that will be called if another activity starts.
   ///
-  /// Note that `onCanceled` will get called even if the subsequent activity
-  /// started after this one finished so `onCanceled` should be safe to call at
+  /// The `onCanceled` callback will get called even if the subsequent activity
+  /// started after this one finished, so `onCanceled` must be safe to call at
   /// any time.
   void startActivity({required VoidCallback onCanceled}) {
     _cancelActivity?.call();
@@ -528,6 +578,7 @@ class _DraggableSheetExtent {
     // The user has interacted with the sheet, set `hasDragged` to true so that
     // we'll snap if applicable.
     hasDragged = true;
+    hasChanged = true;
     if (availablePixels == 0) {
       return;
     }
@@ -540,14 +591,18 @@ class _DraggableSheetExtent {
   /// This can be triggered by a programmatic (e.g. controller triggered) change
   /// or a user drag.
   void updateSize(double newSize, BuildContext context) {
-    assert(newSize != null);
-    _currentSize.value = clampDouble(newSize, minSize, maxSize);
+    final double clampedSize = clampDouble(newSize, minSize, maxSize);
+    if (_currentSize.value == clampedSize) {
+      return;
+    }
+    _currentSize.value = clampedSize;
     DraggableScrollableNotification(
       minExtent: minSize,
       maxExtent: maxSize,
       extent: currentSize,
       initialExtent: initialSize,
       context: context,
+      shouldCloseOnMinExtent: shouldCloseOnMinExtent,
     ).dispatch(context);
   }
 
@@ -560,7 +615,8 @@ class _DraggableSheetExtent {
   }
 
   void dispose() {
-    _currentSize.removeListener(onSizeChanged);
+    assert(debugMaybeDispatchDisposed(this));
+    _currentSize.dispose();
   }
 
   _DraggableSheetExtent copyWith({
@@ -569,20 +625,24 @@ class _DraggableSheetExtent {
     required bool snap,
     required List<double> snapSizes,
     required double initialSize,
-    required VoidCallback onSizeChanged,
+    required Duration? snapAnimationDuration,
+    required bool shouldCloseOnMinExtent,
   }) {
     return _DraggableSheetExtent(
       minSize: minSize,
       maxSize: maxSize,
       snap: snap,
       snapSizes: snapSizes,
+      snapAnimationDuration: snapAnimationDuration,
       initialSize: initialSize,
-      onSizeChanged: onSizeChanged,
-      // Use the possibly updated initialSize if the user hasn't dragged yet.
-      currentSize: ValueNotifier<double>(hasDragged
-          ? clampDouble(_currentSize.value, minSize, maxSize)
-          : initialSize),
+      // Set the current size to the possibly updated initial size if the sheet
+      // hasn't changed yet.
+      currentSize: ValueNotifier<double>(
+        hasChanged ? clampDouble(_currentSize.value, minSize, maxSize) : initialSize,
+      ),
       hasDragged: hasDragged,
+      hasChanged: hasChanged,
+      shouldCloseOnMinExtent: shouldCloseOnMinExtent,
     );
   }
 }
@@ -599,27 +659,29 @@ class _DraggableScrollableSheetState extends State<DraggableScrollableSheet> {
       maxSize: widget.maxChildSize,
       snap: widget.snap,
       snapSizes: _impliedSnapSizes(),
+      snapAnimationDuration: widget.snapAnimationDuration,
       initialSize: widget.initialChildSize,
-      onSizeChanged: _setExtent,
+      shouldCloseOnMinExtent: widget.shouldCloseOnMinExtent,
     );
     _scrollController = _DraggableScrollableSheetScrollController(extent: _extent);
     widget.controller?._attach(_scrollController);
   }
 
   List<double> _impliedSnapSizes() {
-    for (int index = 0; index < (widget.snapSizes?.length ?? 0); index += 1) {
+    for (var index = 0; index < (widget.snapSizes?.length ?? 0); index += 1) {
       final double snapSize = widget.snapSizes![index];
-      assert(snapSize >= widget.minChildSize && snapSize <= widget.maxChildSize,
-        '${_snapSizeErrorMessage(index)}\nSnap sizes must be between `minChildSize` and `maxChildSize`. ');
-      assert(index == 0 || snapSize > widget.snapSizes![index - 1],
-        '${_snapSizeErrorMessage(index)}\nSnap sizes must be in ascending order. ');
+      assert(
+        snapSize >= widget.minChildSize && snapSize <= widget.maxChildSize,
+        '${_snapSizeErrorMessage(index)}\nSnap sizes must be between `minChildSize` and `maxChildSize`. ',
+      );
+      assert(
+        index == 0 || snapSize > widget.snapSizes![index - 1],
+        '${_snapSizeErrorMessage(index)}\nSnap sizes must be in ascending order. ',
+      );
     }
     // Ensure the snap sizes start and end with the min and max child sizes.
     if (widget.snapSizes == null || widget.snapSizes!.isEmpty) {
-      return <double>[
-        widget.minChildSize,
-        widget.maxChildSize,
-      ];
+      return <double>[widget.minChildSize, widget.maxChildSize];
     }
     return <double>[
       if (widget.snapSizes!.first != widget.minChildSize) widget.minChildSize,
@@ -631,6 +693,10 @@ class _DraggableScrollableSheetState extends State<DraggableScrollableSheet> {
   @override
   void didUpdateWidget(covariant DraggableScrollableSheet oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.controller != oldWidget.controller) {
+      oldWidget.controller?._detach();
+      widget.controller?._attach(_scrollController);
+    }
     _replaceExtent(oldWidget);
   }
 
@@ -642,45 +708,46 @@ class _DraggableScrollableSheetState extends State<DraggableScrollableSheet> {
     }
   }
 
-  void _setExtent() {
-    setState(() {
-      // _extent has been updated when this is called.
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        _extent.availablePixels = widget.maxChildSize * constraints.biggest.height;
-        final Widget sheet = FractionallySizedBox(
-          heightFactor: _extent.currentSize,
-          alignment: Alignment.bottomCenter,
-          child: widget.builder(context, _scrollController),
-        );
-        return widget.expand ? SizedBox.expand(child: sheet) : sheet;
-      },
+    return ValueListenableBuilder<double>(
+      valueListenable: _extent._currentSize,
+      builder: (BuildContext context, double currentSize, Widget? child) => LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          _extent.availablePixels = widget.maxChildSize * constraints.biggest.height;
+          final Widget sheet = FractionallySizedBox(
+            heightFactor: currentSize,
+            alignment: Alignment.bottomCenter,
+            child: child,
+          );
+          return widget.expand ? SizedBox.expand(child: sheet) : sheet;
+        },
+      ),
+      child: widget.builder(context, _scrollController),
     );
   }
 
   @override
   void dispose() {
-    widget.controller?._detach();
+    if (widget.controller == null) {
+      _extent.dispose();
+    } else {
+      widget.controller!._detach(disposeExtent: true);
+    }
     _scrollController.dispose();
-    _extent.dispose();
     super.dispose();
   }
 
   void _replaceExtent(covariant DraggableScrollableSheet oldWidget) {
     final _DraggableSheetExtent previousExtent = _extent;
-    _extent.dispose();
-    _extent = _extent.copyWith(
+    _extent = previousExtent.copyWith(
       minSize: widget.minChildSize,
       maxSize: widget.maxChildSize,
       snap: widget.snap,
       snapSizes: _impliedSnapSizes(),
+      snapAnimationDuration: widget.snapAnimationDuration,
       initialSize: widget.initialChildSize,
-      onSizeChanged: _setExtent,
+      shouldCloseOnMinExtent: widget.shouldCloseOnMinExtent,
     );
     // Modify the existing scroll controller instead of replacing it so that
     // developers listening to the controller do not have to rebuild their listeners.
@@ -688,35 +755,34 @@ class _DraggableScrollableSheetState extends State<DraggableScrollableSheet> {
     // If an external facing controller was provided, let it know that the
     // extent has been replaced.
     widget.controller?._onExtentReplaced(previousExtent);
-    if (widget.snap
-        && (widget.snap != oldWidget.snap || widget.snapSizes != oldWidget.snapSizes)
-        && _scrollController.hasClients
-    ) {
+    previousExtent.dispose();
+    if (widget.snap &&
+        (widget.snap != oldWidget.snap || widget.snapSizes != oldWidget.snapSizes) &&
+        _scrollController.hasClients) {
       // Trigger a snap in case snap or snapSizes has changed and there is a
       // scroll position currently attached. We put this in a post frame
       // callback so that `build` can update `_extent.availablePixels` before
       // this runs-we can't use the previous extent's available pixels as it may
       // have changed when the widget was updated.
       WidgetsBinding.instance.addPostFrameCallback((Duration timeStamp) {
-        for (int index = 0; index < _scrollController.positions.length; index++) {
-          final _DraggableScrollableSheetScrollPosition position =
-            _scrollController.positions.elementAt(index) as _DraggableScrollableSheetScrollPosition;
+        for (var index = 0; index < _scrollController.positions.length; index++) {
+          final position = _scrollController.positions.elementAt(
+            index,
+          ) as _DraggableScrollableSheetScrollPosition;
           position.goBallistic(0);
         }
-      });
+      }, debugLabel: 'DraggableScrollableSheet.snap');
     }
   }
 
   String _snapSizeErrorMessage(int invalidIndex) {
-    final List<String> snapSizesWithIndicator = widget.snapSizes!.asMap().keys.map(
-      (int index) {
-        final String snapSizeString = widget.snapSizes![index].toString();
-        if (index == invalidIndex) {
-          return '>>> $snapSizeString <<<';
-        }
-        return snapSizeString;
-      },
-    ).toList();
+    final List<String> snapSizesWithIndicator = widget.snapSizes!.asMap().keys.map((int index) {
+      final snapSizeString = widget.snapSizes![index].toString();
+      if (index == invalidIndex) {
+        return '>>> $snapSizeString <<<';
+      }
+      return snapSizeString;
+    }).toList();
     return "Invalid snapSize '${widget.snapSizes![invalidIndex]}' at index $invalidIndex of:\n"
         '  $snapSizesWithIndicator';
   }
@@ -737,9 +803,7 @@ class _DraggableScrollableSheetState extends State<DraggableScrollableSheet> {
 ///    [_DraggableScrollableSheetScrollController] as the primary controller for
 ///    descendants.
 class _DraggableScrollableSheetScrollController extends ScrollController {
-  _DraggableScrollableSheetScrollController({
-    required this.extent,
-  }) : assert(extent != null);
+  _DraggableScrollableSheetScrollController({required this.extent});
 
   _DraggableSheetExtent extent;
   VoidCallback? onPositionDetached;
@@ -751,7 +815,7 @@ class _DraggableScrollableSheetScrollController extends ScrollController {
     ScrollPosition? oldPosition,
   ) {
     return _DraggableScrollableSheetScrollPosition(
-      physics: physics,
+      physics: physics.applyTo(const AlwaysScrollableScrollPhysics()),
       context: context,
       oldPosition: oldPosition,
       getExtent: () => extent,
@@ -771,15 +835,12 @@ class _DraggableScrollableSheetScrollController extends ScrollController {
   void reset() {
     extent._cancelActivity?.call();
     extent.hasDragged = false;
+    extent.hasChanged = false;
     // jumpTo can result in trying to replace semantics during build.
     // Just animate really fast.
     // Avoid doing it at all if the offset is already 0.0.
     if (offset != 0.0) {
-      animateTo(
-        0.0,
-        duration: const Duration(milliseconds: 1),
-        curve: Curves.linear,
-      );
+      animateTo(0.0, duration: const Duration(milliseconds: 1), curve: Curves.linear);
     }
     extent.updateSize(extent.initialSize, position.context.notificationContext!);
   }
@@ -811,89 +872,44 @@ class _DraggableScrollableSheetScrollPosition extends ScrollPositionWithSingleCo
     required this.getExtent,
   });
 
-  VoidCallback? _dragCancelCallback;
   final _DraggableSheetExtent Function() getExtent;
-  final Set<AnimationController> _ballisticControllers = <AnimationController>{};
   bool get listShouldScroll => pixels > 0.0;
 
   _DraggableSheetExtent get extent => getExtent();
 
   @override
-  void absorb(ScrollPosition other) {
-    super.absorb(other);
-    assert(_dragCancelCallback == null);
-
-    if (other is! _DraggableScrollableSheetScrollPosition) {
-      return;
-    }
-
-    if (other._dragCancelCallback != null) {
-      _dragCancelCallback = other._dragCancelCallback;
-      other._dragCancelCallback = null;
-    }
-  }
-
-  @override
-  void beginActivity(ScrollActivity? newActivity) {
-    // Cancel the running ballistic simulations
-    for (final AnimationController ballisticController in _ballisticControllers) {
-      ballisticController.stop();
-    }
-    super.beginActivity(newActivity);
-  }
-
-  @override
-  bool applyContentDimensions(double minScrollSize, double maxScrollSize) {
-    // We need to provide some extra size if we haven't yet reached the max or
-    // min sizes. Otherwise, a list with fewer children than the size of
-    // the available space will get stuck.
-    return super.applyContentDimensions(
-      minScrollSize - extent.additionalMinSize,
-      maxScrollSize + extent.additionalMaxSize,
-    );
-  }
-
-  @override
   void applyUserOffset(double delta) {
     if (!listShouldScroll &&
         (!(extent.isAtMin || extent.isAtMax) ||
-          (extent.isAtMin && delta < 0) ||
-          (extent.isAtMax && delta > 0))) {
+            (extent.isAtMin && delta < 0) ||
+            (extent.isAtMax && delta > 0))) {
       extent.addPixelDelta(-delta, context.notificationContext!);
     } else {
       super.applyUserOffset(delta);
     }
   }
 
-  bool get _isAtSnapSize {
-    return extent.snapSizes.any(
-      (double snapSize) {
-        return (extent.currentSize - snapSize).abs() <= extent.pixelsToSize(physics.tolerance.distance);
-      },
-    );
+  // Checks if the sheet's current size is close to a snap size, returning the
+  // snap size if so; returns null otherwise.
+  double? _getCurrentSnapSize() {
+    return extent.snapSizes.firstWhereOrNull((double snapSize) {
+      return (extent.currentSize - snapSize).abs() <=
+          extent.pixelsToSize(physics.toleranceFor(this).distance);
+    });
   }
-  bool get _shouldSnap => extent.snap && extent.hasDragged && !_isAtSnapSize;
 
-  @override
-  void dispose() {
-    for (final AnimationController ballisticController in _ballisticControllers) {
-      ballisticController.dispose();
-    }
-    _ballisticControllers.clear();
-    super.dispose();
-  }
+  bool _isAtSnapSize() => _getCurrentSnapSize() != null;
+
+  bool _shouldSnap() => extent.snap && extent.hasDragged && !_isAtSnapSize();
 
   @override
   void goBallistic(double velocity) {
-    if ((velocity == 0.0 && !_shouldSnap) ||
+    if ((velocity == 0.0 && !_shouldSnap()) ||
         (velocity < 0.0 && listShouldScroll) ||
         (velocity > 0.0 && extent.isAtMax)) {
       super.goBallistic(velocity);
       return;
     }
-    // Scrollable expects that we will dispose of its current _dragCancelCallback
-    _dragCancelCallback?.call();
-    _dragCancelCallback = null;
 
     late final Simulation simulation;
     if (extent.snap) {
@@ -902,7 +918,8 @@ class _DraggableScrollableSheetScrollPosition extends ScrollPositionWithSingleCo
         position: extent.currentPixels,
         initialVelocity: velocity,
         pixelSnapSize: extent.pixelSnapSizes,
-        tolerance: physics.tolerance,
+        snapAnimationDuration: extent.snapAnimationDuration,
+        tolerance: physics.toleranceFor(this),
       );
     } else {
       // The iOS bouncing simulation just isn't right here - once we delegate
@@ -911,50 +928,129 @@ class _DraggableScrollableSheetScrollPosition extends ScrollPositionWithSingleCo
         // Run the simulation in terms of pixels, not extent.
         position: extent.currentPixels,
         velocity: velocity,
-        tolerance: physics.tolerance,
+        tolerance: physics.toleranceFor(this),
       );
     }
 
-    final AnimationController ballisticController = AnimationController.unbounded(
-      debugLabel: objectRuntimeType(this, '_DraggableScrollableSheetPosition'),
-      vsync: context.vsync,
+    beginActivity(
+      _DraggableSheetBallisticScrollActivity(
+        this,
+        simulation,
+        context.vsync,
+        shouldIgnorePointer,
+        velocity,
+      ),
     );
-    _ballisticControllers.add(ballisticController);
+  }
 
-    double lastPosition = extent.currentPixels;
-    void tick() {
-      final double delta = ballisticController.value - lastPosition;
-      lastPosition = ballisticController.value;
-      extent.addPixelDelta(delta, context.notificationContext!);
-      if ((velocity > 0 && extent.isAtMax) || (velocity < 0 && extent.isAtMin)) {
-        // Make sure we pass along enough velocity to keep scrolling - otherwise
-        // we just "bounce" off the top making it look like the list doesn't
-        // have more to scroll.
-        velocity = ballisticController.velocity + (physics.tolerance.velocity * ballisticController.velocity.sign);
-        super.goBallistic(velocity);
-        ballisticController.stop();
-      } else if (ballisticController.isCompleted) {
-        super.goBallistic(0);
-      }
+  void _superGoBallistic(double velocity) {
+    super.goBallistic(velocity);
+  }
+}
+
+class _DraggableSheetBallisticScrollActivity extends ScrollActivity {
+  _DraggableSheetBallisticScrollActivity(
+    _DraggableScrollableSheetScrollPosition super.delegate,
+    Simulation simulation,
+    TickerProvider vsync,
+    this.shouldIgnorePointer,
+    this._initialVelocity,
+  ) {
+    _controller =
+        AnimationController.unbounded(
+            debugLabel: kDebugMode
+                ? objectRuntimeType(this, '_DraggableSheetBallisticScrollActivity')
+                : null,
+            vsync: vsync,
+          )
+          ..addListener(_tick)
+          ..animateWith(simulation).whenComplete(_end);
+  }
+
+  late final AnimationController _controller;
+  final double _initialVelocity;
+
+  late double _lastPosition = _position.extent.currentPixels;
+  bool _isDisposed = false;
+
+  _DraggableScrollableSheetScrollPosition get _position {
+    return delegate as _DraggableScrollableSheetScrollPosition;
+  }
+
+  // Intentionally do not override resetActivity() or applyNewDimensions()
+  // so that layout changes during snapping do not restart the simulation.
+
+  void _tick() {
+    if (delegate is! _DraggableScrollableSheetScrollPosition) {
+      // The scrollable switched to a ScrollController that is not the sheet's
+      // while this activity was running, and its new ScrollPosition absorbed this activity.
+      // The sheet can no longer be moved from here, so let the
+      // new position settle on its own.
+      delegate.goBallistic(0.0);
+      return;
     }
 
-    ballisticController
-      ..addListener(tick)
-      ..animateWith(simulation).whenCompleteOrCancel(
-        () {
-          if (_ballisticControllers.contains(ballisticController)) {
-            _ballisticControllers.remove(ballisticController);
-            ballisticController.dispose();
-          }
-        },
-      );
+    final double delta = _controller.value - _lastPosition;
+    _lastPosition = _controller.value;
+    _position.extent.addPixelDelta(delta, _position.context.notificationContext!);
+
+    if ((_initialVelocity > 0 && _controller.velocity > 0 && _position.extent.isAtMax) ||
+        (_initialVelocity < 0 && _controller.velocity < 0 && _position.extent.isAtMin)) {
+      // Make sure we pass along enough velocity to keep scrolling - otherwise
+      // we just "bounce" off the top making it look like the list doesn't
+      // have more to scroll.
+      final double nextVelocity =
+          _controller.velocity +
+          (_position.physics.toleranceFor(_position).velocity * _controller.velocity.sign);
+      _controller.stop();
+      _position._superGoBallistic(nextVelocity);
+    }
+  }
+
+  void _end() {
+    if (_isDisposed) {
+      return;
+    }
+
+    // Update the extent value after the snap animation completes to
+    // avoid rounding errors that could prevent the sheet from closing when
+    // it reaches minSize.
+    final double? snapSize = _position._getCurrentSnapSize();
+    if (snapSize != null) {
+      _position.extent.updateSize(snapSize, _position.context.notificationContext!);
+    }
+    _position._superGoBallistic(0.0);
+  }
+
+  // Whether the scrollable should ignore pointer events while the sheet is
+  // snapping or animating.
+  @override
+  final bool shouldIgnorePointer;
+
+  // The scrollable is actively in motion while the sheet animates, so this
+  // remains true even though the list's scroll velocity is 0.0.
+  @override
+  bool get isScrolling => true;
+
+  // The scroll offset is stationary while the sheet itself animates size, so
+  // the scroll offset velocity is 0.0.
+  @override
+  double get velocity => 0.0;
+
+  @override
+  void dispose() {
+    if (_isDisposed) {
+      return;
+    }
+
+    _isDisposed = true;
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
-  Drag drag(DragStartDetails details, VoidCallback dragCancelCallback) {
-    // Save this so we can call it later if we have to [goBallistic] on our own.
-    _dragCancelCallback = dragCancelCallback;
-    return super.drag(details, dragCancelCallback);
+  String toString() {
+    return '${describeIdentity(this)}($_controller)';
   }
 }
 
@@ -972,23 +1068,16 @@ class _DraggableScrollableSheetScrollPosition extends ScrollPositionWithSingleCo
 /// in library users' code). Generally, it's easier to control the sheet
 /// directly by creating a controller and passing the controller to the sheet in
 /// its constructor (see [DraggableScrollableSheet.controller]).
-class DraggableScrollableActuator extends StatelessWidget {
+class DraggableScrollableActuator extends StatefulWidget {
   /// Creates a widget that can notify descendent [DraggableScrollableSheet]s
   /// to reset to their initial position.
   ///
   /// The [child] parameter is required.
-  DraggableScrollableActuator({
-    super.key,
-    required this.child,
-  });
+  const DraggableScrollableActuator({super.key, required this.child});
 
   /// This child's [DraggableScrollableSheet] descendant will be reset when the
   /// [reset] method is applied to a context that includes it.
-  ///
-  /// Must not be null.
   final Widget child;
-
-  final _ResetNotifier _notifier = _ResetNotifier();
 
   /// Notifies any descendant [DraggableScrollableSheet] that it should reset
   /// to its initial position.
@@ -997,22 +1086,39 @@ class DraggableScrollableActuator extends StatelessWidget {
   /// some [DraggableScrollableSheet] is listening for updates, `false`
   /// otherwise.
   static bool reset(BuildContext context) {
-    final _InheritedResetNotifier? notifier = context.dependOnInheritedWidgetOfExactType<_InheritedResetNotifier>();
-    if (notifier == null) {
-      return false;
-    }
-    return notifier._sendReset();
+    final _InheritedResetNotifier? notifier = context
+        .dependOnInheritedWidgetOfExactType<_InheritedResetNotifier>();
+    return notifier?._sendReset() ?? false;
   }
 
   @override
+  State<DraggableScrollableActuator> createState() => _DraggableScrollableActuatorState();
+}
+
+class _DraggableScrollableActuatorState extends State<DraggableScrollableActuator> {
+  final _ResetNotifier _notifier = _ResetNotifier();
+
+  @override
   Widget build(BuildContext context) {
-    return _InheritedResetNotifier(notifier: _notifier, child: child);
+    return _InheritedResetNotifier(notifier: _notifier, child: widget.child);
+  }
+
+  @override
+  void dispose() {
+    _notifier.dispose();
+    super.dispose();
   }
 }
 
-/// A [ChangeNotifier] to use with [InheritedResetNotifier] to notify
+/// A [ChangeNotifier] to use with [_InheritedResetNotifier] to notify
 /// descendants that they should reset to initial state.
 class _ResetNotifier extends ChangeNotifier {
+  _ResetNotifier() {
+    if (kFlutterMemoryAllocationsEnabled) {
+      ChangeNotifier.maybeDispatchObjectCreation(this);
+    }
+  }
+
   /// Whether someone called [sendReset] or not.
   ///
   /// This flag should be reset after checking it.
@@ -1034,12 +1140,7 @@ class _ResetNotifier extends ChangeNotifier {
 class _InheritedResetNotifier extends InheritedNotifier<_ResetNotifier> {
   /// Creates an [InheritedNotifier] that the [DraggableScrollableSheet] will
   /// listen to for an indication that it should reset itself back to [DraggableScrollableSheet.initialChildSize].
-  ///
-  /// The [child] and [notifier] properties must not be null.
-  const _InheritedResetNotifier({
-    required super.child,
-    required _ResetNotifier super.notifier,
-  });
+  const _InheritedResetNotifier({required super.child, required _ResetNotifier super.notifier});
 
   bool _sendReset() => notifier!.sendReset();
 
@@ -1048,12 +1149,13 @@ class _InheritedResetNotifier extends InheritedNotifier<_ResetNotifier> {
   ///
   /// Returns true if the notifier requested a reset, false otherwise.
   static bool shouldReset(BuildContext context) {
-    final InheritedWidget? widget = context.dependOnInheritedWidgetOfExactType<_InheritedResetNotifier>();
+    final InheritedWidget? widget = context
+        .dependOnInheritedWidgetOfExactType<_InheritedResetNotifier>();
     if (widget == null) {
       return false;
     }
     assert(widget is _InheritedResetNotifier);
-    final _InheritedResetNotifier inheritedNotifier = widget as _InheritedResetNotifier;
+    final inheritedNotifier = widget as _InheritedResetNotifier;
     final bool wasCalled = inheritedNotifier.notifier!._wasCalled;
     inheritedNotifier.notifier!._wasCalled = false;
     return wasCalled;
@@ -1065,12 +1167,17 @@ class _SnappingSimulation extends Simulation {
     required this.position,
     required double initialVelocity,
     required List<double> pixelSnapSize,
+    Duration? snapAnimationDuration,
     super.tolerance,
   }) {
     _pixelSnapSize = _getSnapSize(initialVelocity, pixelSnapSize);
+
+    if (snapAnimationDuration != null && snapAnimationDuration.inMilliseconds > 0) {
+      velocity = (_pixelSnapSize - position) * 1000 / snapAnimationDuration.inMilliseconds;
+    }
     // Check the direction of the target instead of the sign of the velocity because
     // we may snap in the opposite direction of velocity if velocity is very low.
-    if (_pixelSnapSize < position) {
+    else if (_pixelSnapSize < position) {
       velocity = math.min(-minimumSpeed, initialVelocity);
     } else {
       velocity = math.max(minimumSpeed, initialVelocity);
@@ -1114,12 +1221,15 @@ class _SnappingSimulation extends Simulation {
   // non-zero, select the size in the velocity's direction. Otherwise,
   // the nearest snap size.
   double _getSnapSize(double initialVelocity, List<double> pixelSnapSizes) {
-    final int indexOfNextSize = pixelSnapSizes
-        .indexWhere((double size) => size >= position);
+    final int indexOfNextSize = pixelSnapSizes.indexWhere((double size) => size >= position);
     if (indexOfNextSize == 0) {
       return pixelSnapSizes.first;
     }
     final double nextSize = pixelSnapSizes[indexOfNextSize];
+    // If already snapped - keep this as target size
+    if (nextSize == position) {
+      return nextSize;
+    }
     final double previousSize = pixelSnapSizes[indexOfNextSize - 1];
     if (initialVelocity.abs() <= tolerance.velocity) {
       // If velocity is zero, snap to the nearest snap size with the minimum velocity.

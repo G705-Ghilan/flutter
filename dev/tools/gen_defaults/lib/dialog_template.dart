@@ -5,20 +5,24 @@
 import 'template.dart';
 
 class DialogTemplate extends TokenTemplate {
-  const DialogTemplate(super.fileName, super.tokens)
-    : super(colorSchemePrefix: '_colors.',
-        textThemePrefix: '_textTheme.'
-      );
+  const DialogTemplate(
+    super.blockName,
+    super.fileName,
+    super.tokens, {
+    super.colorSchemePrefix = '_colors.',
+    super.textThemePrefix = '_textTheme.',
+  });
 
   @override
-  String generate() => '''
-// Generated version ${tokens["version"]}
-class _TokenDefaultsM3 extends DialogTheme {
-  _TokenDefaultsM3(this.context)
+  String generate() =>
+      '''
+class _${blockName}DefaultsM3 extends DialogThemeData {
+  _${blockName}DefaultsM3(this.context)
     : super(
         alignment: Alignment.center,
         elevation: ${elevation("md.comp.dialog.container")},
         shape: ${shape("md.comp.dialog.container")},
+        clipBehavior: Clip.none,
       );
 
   final BuildContext context;
@@ -28,9 +32,14 @@ class _TokenDefaultsM3 extends DialogTheme {
   @override
   Color? get iconColor => _colors.secondary;
 
-  // TODO(darrenaustin): overlay should be handled by Material widget: https://github.com/flutter/flutter/issues/9160
   @override
-  Color? get backgroundColor => ElevationOverlay.colorWithOverlay(${componentColor("md.comp.dialog.container")}, _colors.primary, ${elevation("md.comp.dialog.container")});
+  Color? get backgroundColor => ${componentColor("md.comp.dialog.container")};
+
+  @override
+  Color? get shadowColor => ${colorOrTransparent("md.comp.dialog.container.shadow-color")};
+
+  @override
+  Color? get surfaceTintColor => ${colorOrTransparent("md.comp.dialog.container.surface-tint-layer.color")};
 
   @override
   TextStyle? get titleTextStyle => ${textStyle("md.comp.dialog.headline")};
@@ -40,6 +49,23 @@ class _TokenDefaultsM3 extends DialogTheme {
 
   @override
   EdgeInsetsGeometry? get actionsPadding => const EdgeInsets.only(left: 24.0, right: 24.0, bottom: 24.0);
+}
+''';
+}
+
+class DialogFullscreenTemplate extends TokenTemplate {
+  const DialogFullscreenTemplate(super.blockName, super.fileName, super.tokens);
+
+  @override
+  String generate() =>
+      '''
+class _${blockName}DefaultsM3 extends DialogThemeData {
+  const _${blockName}DefaultsM3(this.context): super(clipBehavior: Clip.none);
+
+  final BuildContext context;
+
+  @override
+  Color? get backgroundColor => ${componentColor("md.comp.full-screen-dialog.container")};
 }
 ''';
 }

@@ -2,11 +2,29 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'package:flutter/services.dart';
+/// @docImport 'package:flutter/widgets.dart';
+library;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
 export 'dart:ui' show TextDirection;
+
+/// Determines the assertiveness level of the accessibility announcement.
+///
+/// It is used by [AnnounceSemanticsEvent] to determine the priority with which
+/// assistive technology should treat announcements.
+enum Assertiveness {
+  /// The assistive technology will speak changes whenever the user is idle.
+  polite,
+
+  /// The assistive technology will interrupt any announcement that it is
+  /// currently making to notify the user about the change.
+  ///
+  /// It should only be used for time-sensitive/critical notifications.
+  assertive,
+}
 
 /// An event sent by the application to notify interested listeners that
 /// something happened to the user interface (e.g. a view scrolled).
@@ -31,11 +49,8 @@ abstract class SemanticsEvent {
   ///
   /// [nodeId] is the unique identifier of the semantics node associated with
   /// the event, or null if the event is not associated with a semantics node.
-  Map<String, dynamic> toMap({ int? nodeId }) {
-    final Map<String, dynamic> event = <String, dynamic>{
-      'type': type,
-      'data': getDataMap(),
-    };
+  Map<String, dynamic> toMap({int? nodeId}) {
+    final event = <String, dynamic>{'type': type, 'data': getDataMap()};
     if (nodeId != null) {
       event['nodeId'] = nodeId;
     }
@@ -48,10 +63,10 @@ abstract class SemanticsEvent {
 
   @override
   String toString() {
-    final List<String> pairs = <String>[];
+    final pairs = <String>[];
     final Map<String, dynamic> dataMap = getDataMap();
     final List<String> sortedKeys = dataMap.keys.toList()..sort();
-    for (final String key in sortedKeys) {
+    for (final key in sortedKeys) {
       pairs.add('$key: ${dataMap[key]}');
     }
     return '${objectRuntimeType(this, 'SemanticsEvent')}(${pairs.join(', ')})';
@@ -68,29 +83,49 @@ abstract class SemanticsEvent {
 ///
 /// When possible, prefer using mechanisms like [Semantics] to implicitly
 /// trigger announcements over using this event.
+///
+/// ### Android
+/// Android has [deprecated announcement events][1] due to its disruptive
+/// behavior with TalkBack forcing it to clear its speech queue and speak the
+/// provided text. Instead, use mechanisms like [Semantics] to implicitly
+/// trigger announcements.
+///
+/// [1]: https://developer.android.com/reference/android/view/View#announceForAccessibility(java.lang.CharSequence)
+///
 class AnnounceSemanticsEvent extends SemanticsEvent {
+  /// Constructs an event that triggers an announcement by the platform
+  /// for the provided view.
+  const AnnounceSemanticsEvent(
+    this.message,
+    this.textDirection,
+    this.viewId, {
+    this.assertiveness = Assertiveness.polite,
+  }) : super('announce');
 
-  /// Constructs an event that triggers an announcement by the platform.
-  const AnnounceSemanticsEvent(this.message, this.textDirection)
-    : assert(message != null),
-      assert(textDirection != null),
-      super('announce');
+  /// The view that this announcement is on.
+  final int viewId;
 
   /// The message to announce.
-  ///
-  /// This property must not be null.
   final String message;
 
   /// Text direction for [message].
-  ///
-  /// This property must not be null.
   final TextDirection textDirection;
+
+  /// Determines whether the announcement should interrupt any existing announcement,
+  /// or queue after it.
+  ///
+  /// On the web this option uses the aria-live level to set the assertiveness
+  /// of the announcement. On iOS, Android, Windows, Linux, macOS, and Fuchsia
+  /// this option currently has no effect.
+  final Assertiveness assertiveness;
 
   @override
   Map<String, dynamic> getDataMap() {
     return <String, dynamic>{
+      'viewId': viewId,
       'message': message,
       'textDirection': textDirection.index,
+      if (assertiveness != Assertiveness.polite) 'assertiveness': assertiveness.index,
     };
   }
 }
@@ -107,9 +142,7 @@ class TooltipSemanticsEvent extends SemanticsEvent {
 
   @override
   Map<String, dynamic> getDataMap() {
-    return <String, dynamic>{
-      'message': message,
-    };
+    return <String, dynamic>{'message': message};
   }
 }
 
@@ -132,6 +165,73 @@ class LongPressSemanticsEvent extends SemanticsEvent {
 class TapSemanticEvent extends SemanticsEvent {
   /// Constructs an event that triggers a long-press semantic feedback by the platform.
   const TapSemanticEvent() : super('tap');
+
+  @override
+  Map<String, dynamic> getDataMap() => const <String, dynamic>{};
+}
+
+/// An event to move the accessibility focus.
+///
+/// Using this API is generally not recommended, as it may break a users' expectation of
+/// how a11y focus works and therefore should be used very carefully.
+///
+/// One possible use case:
+/// For example, the currently focused rendering object is replaced by another rendering
+/// object. In general, such design should be avoided if possible. If not, one may want
+/// to refocus the newly added rendering object.
+///
+/// One example that is not recommended:
+/// When a new popup or dropdown opens, moving the focus in these cases may confuse users
+/// and make it less accessible.
+///
+/// {@tool snippet}
+///
+/// The following code snippet shows how one can request focus on a
+/// certain widget.
+///
+/// ```dart
+/// class MyWidget extends StatefulWidget {
+///   const MyWidget({super.key});
+///
+///   @override
+///   State<MyWidget> createState() => _MyWidgetState();
+/// }
+///
+/// class _MyWidgetState extends State<MyWidget> {
+///   final GlobalKey mykey = GlobalKey();
+///
+///   @override
+///   void initState() {
+///     super.initState();
+///     // Using addPostFrameCallback because changing focus need to wait for the widget to finish rendering.
+///     WidgetsBinding.instance.addPostFrameCallback((_) {
+///       mykey.currentContext?.findRenderObject()?.sendSemanticsEvent(const FocusSemanticEvent());
+///     });
+///   }
+///
+///   @override
+///   Widget build(BuildContext context) {
+///     return Scaffold(
+///       appBar: AppBar(
+///         title: const Text('example'),
+///       ),
+///       body: Column(
+///         children: <Widget>[
+///           const Text('Hello World'),
+///           const SizedBox(height: 50),
+///           Text('set focus here', key: mykey),
+///         ],
+///       ),
+///     );
+///   }
+/// }
+/// ```
+/// {@end-tool}
+///
+/// This currently only supports Android and iOS.
+class FocusSemanticEvent extends SemanticsEvent {
+  /// Constructs an event that triggers a focus change by the platform.
+  const FocusSemanticEvent() : super('focus');
 
   @override
   Map<String, dynamic> getDataMap() => const <String, dynamic>{};

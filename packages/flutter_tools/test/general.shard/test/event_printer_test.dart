@@ -10,7 +10,7 @@ import '../../src/common.dart';
 
 void main() {
   group(EventPrinter, () {
-    final Uri observatoryUri = Uri.parse('http://localhost:1234');
+    final Uri vmServiceUri = Uri.parse('http://localhost:1234');
     late EventPrinter eventPrinter;
     late StringBuffer output;
 
@@ -19,34 +19,34 @@ void main() {
       eventPrinter = EventPrinter(out: output);
     });
 
-    testWithoutContext('handles a null parent', () {
-      final FakeDevice device = FakeDevice();
+    test('handles a null parent', () {
+      final device = FakeDevice();
 
       expect(() => eventPrinter.handleFinishedTest(device), returnsNormally);
-      expect(() => eventPrinter.handleStartedDevice(observatoryUri), returnsNormally);
+      expect(() => eventPrinter.handleStartedDevice(vmServiceUri), returnsNormally);
       expect(() => eventPrinter.handleTestCrashed(device), returnsNormally);
       expect(() => eventPrinter.handleTestTimedOut(device), returnsNormally);
     });
 
     group('handleStartedDevice', () {
-      testWithoutContext('with non-null observatory', () {
-        eventPrinter.handleStartedDevice(observatoryUri);
+      test('with non-null VM Service', () {
+        eventPrinter.handleStartedDevice(vmServiceUri);
 
         expect(
           output.toString(),
           '\n'
-          '[{"event":"test.startedProcess","params":{"observatoryUri":"http://localhost:1234"}}]'
+          '[{"event":"test.startedProcess","params":{"vmServiceUri":"http://localhost:1234"}}]'
           '\n',
         );
       });
 
-      testWithoutContext('with null observatory', () {
+      test('with null VM Service', () {
         eventPrinter.handleStartedDevice(null);
 
         expect(
           output.toString(),
           '\n'
-          '[{"event":"test.startedProcess","params":{"observatoryUri":null}}]'
+          '[{"event":"test.startedProcess","params":{"vmServiceUri":null}}]'
           '\n',
         );
       });
@@ -54,4 +54,4 @@ void main() {
   });
 }
 
-class FakeDevice extends Fake implements TestDevice { }
+class FakeDevice extends Fake implements TestDevice {}

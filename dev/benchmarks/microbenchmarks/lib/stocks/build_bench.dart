@@ -11,17 +11,17 @@ import '../common.dart';
 
 const Duration kBenchmarkTime = Duration(seconds: 15);
 
-Future<void> main() async {
+Future<List<double>> runBuildBenchmark() async {
   assert(false, "Don't run benchmarks in debug mode! Use 'flutter run --release'.");
   stock_data.StockData.actuallyFetchData = false;
 
   // We control the framePolicy below to prevent us from scheduling frames in
   // the engine, so that the engine does not interfere with our timings.
-  final LiveTestWidgetsFlutterBinding binding = TestWidgetsFlutterBinding.ensureInitialized() as LiveTestWidgetsFlutterBinding;
+  final binding = TestWidgetsFlutterBinding.ensureInitialized() as LiveTestWidgetsFlutterBinding;
 
-  final Stopwatch watch = Stopwatch();
-  int iterations = 0;
-  final List<double> values = <double>[];
+  final watch = Stopwatch();
+  var iterations = 0;
+  final values = <double>[];
 
   await benchmarkWidgets((WidgetTester tester) async {
     stocks.main();
@@ -29,7 +29,7 @@ Future<void> main() async {
     await tester.pump(const Duration(seconds: 1)); // Complete startup animation
     await tester.tapAt(const Offset(20.0, 40.0)); // Open drawer
     await tester.pump(); // Start drawer animation
-    await tester.pump(const Duration(seconds: 1)); // Complete drawer animation
+    await tester.pumpAndSettle(const Duration(seconds: 1)); // Complete drawer animation
 
     final Element appState = tester.element(find.byType(stocks.StocksApp));
     binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.benchmark;
@@ -52,13 +52,23 @@ Future<void> main() async {
       values.add(watch.elapsedMicroseconds.toDouble());
     }
   });
+  return values;
+}
 
-  final BenchmarkResultPrinter printer = BenchmarkResultPrinter();
+Future<void> execute() async {
+  final printer = BenchmarkResultPrinter();
   printer.addResultStatistics(
     description: 'Stock build',
-    values: values,
+    values: await runBuildBenchmark(),
     unit: 'µs per iteration',
     name: 'stock_build_iteration',
   );
   printer.printToStdout();
+}
+
+//
+//  Note that the benchmark is normally run by benchmark_collection.dart.
+//
+Future<void> main() async {
+  return execute();
 }

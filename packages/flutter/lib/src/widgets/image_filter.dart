@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'basic.dart';
+/// @docImport 'color_filter.dart';
+library;
+
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -34,19 +38,12 @@ import 'framework.dart';
 @immutable
 class ImageFiltered extends SingleChildRenderObjectWidget {
   /// Creates a widget that applies an [ImageFilter] to its child.
-  ///
-  /// The [imageFilter] must not be null.
-  const ImageFiltered({
-    super.key,
-    required this.imageFilter,
-    super.child,
-    this.enabled = true,
-  }) : assert(imageFilter != null);
+  const ImageFiltered({super.key, required this.imageFilter, super.child, this.enabled = true});
 
   /// The image filter to apply to the child of this widget.
   final ImageFilter imageFilter;
 
-  /// Whether or not to apply the image filter opation to the child of this
+  /// Whether or not to apply the image filter operation to the child of this
   /// widget.
   ///
   /// Prefer setting enabled to `false` instead of creating a "no-op" filter
@@ -54,7 +51,8 @@ class ImageFiltered extends SingleChildRenderObjectWidget {
   final bool enabled;
 
   @override
-  RenderObject createRenderObject(BuildContext context) => _ImageFilterRenderObject(imageFilter, enabled);
+  RenderObject createRenderObject(BuildContext context) =>
+      _ImageFilterRenderObject(imageFilter, enabled);
 
   @override
   void updateRenderObject(BuildContext context, RenderObject renderObject) {
@@ -79,17 +77,20 @@ class _ImageFilterRenderObject extends RenderProxyBox {
     if (enabled == value) {
       return;
     }
+    final bool wasRepaintBoundary = isRepaintBoundary;
     _enabled = value;
+    if (isRepaintBoundary != wasRepaintBoundary) {
+      markNeedsCompositingBitsUpdate();
+    }
     markNeedsPaint();
   }
 
   ImageFilter get imageFilter => _imageFilter;
   ImageFilter _imageFilter;
   set imageFilter(ImageFilter value) {
-    assert(value != null);
     if (value != _imageFilter) {
       _imageFilter = value;
-      markNeedsPaint();
+      markNeedsCompositedLayerUpdate();
     }
   }
 
@@ -97,23 +98,12 @@ class _ImageFilterRenderObject extends RenderProxyBox {
   bool get alwaysNeedsCompositing => child != null && enabled;
 
   @override
-  void paint(PaintingContext context, Offset offset) {
-    assert(imageFilter != null);
-    if (!enabled) {
-      layer = null;
-      return super.paint(context, offset);
-    }
+  bool get isRepaintBoundary => alwaysNeedsCompositing;
 
-    if (layer == null) {
-      layer = ImageFilterLayer(imageFilter: imageFilter);
-    } else {
-      final ImageFilterLayer filterLayer = layer! as ImageFilterLayer;
-      filterLayer.imageFilter = imageFilter;
-    }
-    context.pushLayer(layer!, super.paint, offset);
-    assert(() {
-      layer!.debugCreator = debugCreator;
-      return true;
-    }());
+  @override
+  OffsetLayer updateCompositedLayer({required covariant ImageFilterLayer? oldLayer}) {
+    final ImageFilterLayer layer = oldLayer ?? ImageFilterLayer();
+    layer.imageFilter = imageFilter;
+    return layer;
   }
 }

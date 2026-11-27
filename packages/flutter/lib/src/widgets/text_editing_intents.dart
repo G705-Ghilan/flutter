@@ -2,9 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'default_text_editing_shortcuts.dart';
+/// @docImport 'editable_text.dart';
+library;
+
 import 'package:flutter/services.dart';
 
 import 'actions.dart';
+import 'basic.dart';
+import 'focus_manager.dart';
 
 /// An [Intent] to send the event straight to the engine.
 ///
@@ -20,15 +26,13 @@ class DoNothingAndStopPropagationTextIntent extends Intent {
 /// direction of the current caret location.
 abstract class DirectionalTextEditingIntent extends Intent {
   /// Creates a [DirectionalTextEditingIntent].
-  const DirectionalTextEditingIntent(
-    this.forward,
-  );
+  const DirectionalTextEditingIntent(this.forward);
 
   /// Whether the input field, if applicable, should perform the text editing
   /// operation from the current caret location towards the end of the document.
   ///
   /// Unless otherwise specified by the recipient of this intent, this parameter
-  /// uses the logical order of characters in the string to determind the
+  /// uses the logical order of characters in the string to determine the
   /// direction, and is not affected by the writing direction of the text.
   final bool forward;
 }
@@ -43,21 +47,21 @@ abstract class DirectionalTextEditingIntent extends Intent {
 /// caret ([TextSelection.isValid] is false for the current selection).
 class DeleteCharacterIntent extends DirectionalTextEditingIntent {
   /// Creates a [DeleteCharacterIntent].
-  const DeleteCharacterIntent({ required bool forward }) : super(forward);
+  const DeleteCharacterIntent({required bool forward}) : super(forward);
 }
 
 /// Deletes from the current caret location to the previous or next word
 /// boundary, based on whether `forward` is true.
 class DeleteToNextWordBoundaryIntent extends DirectionalTextEditingIntent {
   /// Creates a [DeleteToNextWordBoundaryIntent].
-  const DeleteToNextWordBoundaryIntent({ required bool forward }) : super(forward);
+  const DeleteToNextWordBoundaryIntent({required bool forward}) : super(forward);
 }
 
 /// Deletes from the current caret location to the previous or next soft or hard
 /// line break, based on whether `forward` is true.
 class DeleteToLineBreakIntent extends DirectionalTextEditingIntent {
   /// Creates a [DeleteToLineBreakIntent].
-  const DeleteToLineBreakIntent({ required bool forward }) : super(forward);
+  const DeleteToLineBreakIntent({required bool forward}) : super(forward);
 }
 
 /// A [DirectionalTextEditingIntent] that moves the caret or the selection to a
@@ -66,12 +70,10 @@ abstract class DirectionalCaretMovementIntent extends DirectionalTextEditingInte
   /// Creates a [DirectionalCaretMovementIntent].
   const DirectionalCaretMovementIntent(
     super.forward,
-    this.collapseSelection,
-    [
-      this.collapseAtReversal = false,
-      this.continuesAtWrap = false,
-    ]
-  ) : assert(!collapseSelection || !collapseAtReversal);
+    this.collapseSelection, [
+    this.collapseAtReversal = false,
+    this.continuesAtWrap = false,
+  ]) : assert(!collapseSelection || !collapseAtReversal);
 
   /// Whether this [Intent] should make the selection collapsed (so it becomes a
   /// caret), after the movement.
@@ -99,7 +101,7 @@ abstract class DirectionalCaretMovementIntent extends DirectionalTextEditingInte
   ///
   /// If true, when an [Intent] to go to the beginning/end of a wordwrapped line
   /// is received and the selection is already at the beginning/end of the line,
-  /// then the selection will be moved to the next/previous line.  If false, the
+  /// then the selection will be moved to the next/previous line. If false, the
   /// selection will remain at the wordwrap.
   final bool continuesAtWrap;
 }
@@ -109,10 +111,8 @@ abstract class DirectionalCaretMovementIntent extends DirectionalTextEditingInte
 /// boundary.
 class ExtendSelectionByCharacterIntent extends DirectionalCaretMovementIntent {
   /// Creates an [ExtendSelectionByCharacterIntent].
-  const ExtendSelectionByCharacterIntent({
-    required bool forward,
-    required bool collapseSelection,
-  }) : super(forward, collapseSelection);
+  const ExtendSelectionByCharacterIntent({required bool forward, required bool collapseSelection})
+    : super(forward, collapseSelection);
 }
 
 /// Extends, or moves the current selection from the current
@@ -137,11 +137,11 @@ class ExtendSelectionToNextWordBoundaryIntent extends DirectionalCaretMovementIn
 /// reverse.
 ///
 /// This is typically only used on MacOS.
-class ExtendSelectionToNextWordBoundaryOrCaretLocationIntent extends DirectionalTextEditingIntent {
+class ExtendSelectionToNextWordBoundaryOrCaretLocationIntent
+    extends DirectionalCaretMovementIntent {
   /// Creates an [ExtendSelectionToNextWordBoundaryOrCaretLocationIntent].
-  const ExtendSelectionToNextWordBoundaryOrCaretLocationIntent({
-    required bool forward,
-  }) : super(forward);
+  const ExtendSelectionToNextWordBoundaryOrCaretLocationIntent({required bool forward})
+    : super(forward, false, true);
 }
 
 /// Expands the current selection to the document boundary in the direction
@@ -154,11 +154,9 @@ class ExtendSelectionToNextWordBoundaryOrCaretLocationIntent extends Directional
 ///
 ///   [ExtendSelectionToDocumentBoundaryIntent], which is similar but always
 ///   moves the extent.
-class ExpandSelectionToDocumentBoundaryIntent extends DirectionalTextEditingIntent {
+class ExpandSelectionToDocumentBoundaryIntent extends DirectionalCaretMovementIntent {
   /// Creates an [ExpandSelectionToDocumentBoundaryIntent].
-  const ExpandSelectionToDocumentBoundaryIntent({
-    required bool forward,
-  }) : super(forward);
+  const ExpandSelectionToDocumentBoundaryIntent({required bool forward}) : super(forward, false);
 }
 
 /// Expands the current selection to the closest line break in the direction
@@ -173,11 +171,9 @@ class ExpandSelectionToDocumentBoundaryIntent extends DirectionalTextEditingInte
 ///
 ///   [ExtendSelectionToLineBreakIntent], which is similar but always moves the
 ///   extent.
-class ExpandSelectionToLineBreakIntent extends DirectionalTextEditingIntent {
+class ExpandSelectionToLineBreakIntent extends DirectionalCaretMovementIntent {
   /// Creates an [ExpandSelectionToLineBreakIntent].
-  const ExpandSelectionToLineBreakIntent({
-    required bool forward,
-  }) : super(forward);
+  const ExpandSelectionToLineBreakIntent({required bool forward}) : super(forward, false);
 }
 
 /// Extends, or moves the current selection from the current
@@ -210,6 +206,45 @@ class ExtendSelectionVerticallyToAdjacentLineIntent extends DirectionalCaretMove
   }) : super(forward, collapseSelection);
 }
 
+/// Expands, or moves the current selection from the current
+/// [TextSelection.extent] position to the closest position on the adjacent
+/// page.
+class ExtendSelectionVerticallyToAdjacentPageIntent extends DirectionalCaretMovementIntent {
+  /// Creates an [ExtendSelectionVerticallyToAdjacentPageIntent].
+  const ExtendSelectionVerticallyToAdjacentPageIntent({
+    required bool forward,
+    required bool collapseSelection,
+  }) : super(forward, collapseSelection);
+}
+
+/// Extends, or moves the current selection from the current
+/// [TextSelection.extent] position to the previous or the next paragraph
+/// boundary.
+class ExtendSelectionToNextParagraphBoundaryIntent extends DirectionalCaretMovementIntent {
+  /// Creates an [ExtendSelectionToNextParagraphBoundaryIntent].
+  const ExtendSelectionToNextParagraphBoundaryIntent({
+    required bool forward,
+    required bool collapseSelection,
+  }) : super(forward, collapseSelection);
+}
+
+/// Extends, or moves the current selection from the current
+/// [TextSelection.extent] position to the previous or the next paragraph
+/// boundary depending on the [forward] parameter.
+///
+/// This [Intent] typically has the same effect as an
+/// [ExtendSelectionToNextParagraphBoundaryIntent], except it collapses the selection
+/// when the order of [TextSelection.base] and [TextSelection.extent] would
+/// reverse.
+///
+/// This is typically only used on MacOS.
+class ExtendSelectionToNextParagraphBoundaryOrCaretLocationIntent
+    extends DirectionalCaretMovementIntent {
+  /// Creates an [ExtendSelectionToNextParagraphBoundaryOrCaretLocationIntent].
+  const ExtendSelectionToNextParagraphBoundaryOrCaretLocationIntent({required bool forward})
+    : super(forward, false, true);
+}
+
 /// Extends, or moves the current selection from the current
 /// [TextSelection.extent] position to the start or the end of the document.
 ///
@@ -229,9 +264,7 @@ class ExtendSelectionToDocumentBoundaryIntent extends DirectionalCaretMovementIn
 /// parameter.
 class ScrollToDocumentBoundaryIntent extends DirectionalTextEditingIntent {
   /// Creates a [ScrollToDocumentBoundaryIntent].
-  const ScrollToDocumentBoundaryIntent({
-    required bool forward,
-  }) : super(forward);
+  const ScrollToDocumentBoundaryIntent({required bool forward}) : super(forward);
 }
 
 /// An [Intent] to select everything in the field.
@@ -256,7 +289,10 @@ class CopySelectionTextIntent extends Intent {
 
   /// An [Intent] that represents a user interaction that attempts to copy the
   /// current selection in the field.
-  static const CopySelectionTextIntent copy = CopySelectionTextIntent._(SelectionChangedCause.keyboard, false);
+  static const CopySelectionTextIntent copy = CopySelectionTextIntent._(
+    SelectionChangedCause.keyboard,
+    false,
+  );
 
   /// {@macro flutter.widgets.TextEditingIntents.cause}
   final SelectionChangedCause cause;
@@ -289,7 +325,12 @@ class RedoTextIntent extends Intent {
 /// current [TextEditingValue] in an input field.
 class ReplaceTextIntent extends Intent {
   /// Creates a [ReplaceTextIntent].
-  const ReplaceTextIntent(this.currentTextEditingValue, this.replacementText, this.replacementRange, this.cause);
+  const ReplaceTextIntent(
+    this.currentTextEditingValue,
+    this.replacementText,
+    this.replacementRange,
+    this.cause,
+  );
 
   /// The [TextEditingValue] that this [Intent]'s action should perform on.
   final TextEditingValue currentTextEditingValue;
@@ -335,4 +376,63 @@ class UpdateSelectionIntent extends Intent {
 class TransposeCharactersIntent extends Intent {
   /// Creates a [TransposeCharactersIntent].
   const TransposeCharactersIntent();
+}
+
+/// An [Intent] that represents a tap outside the field.
+///
+/// Invoked when the user taps outside the focused [EditableText] if
+/// [EditableText.onTapOutside] is null.
+///
+/// Override this [Intent] to modify the default behavior, which is to unfocus
+/// on a touch event on web and do nothing on other platforms.
+///
+/// See also:
+///
+///  * [Action.overridable] for an example on how to make an [Action]
+///    overridable.
+class EditableTextTapOutsideIntent extends Intent {
+  /// Creates an [EditableTextTapOutsideIntent].
+  const EditableTextTapOutsideIntent({required this.focusNode, required this.pointerDownEvent});
+
+  /// The [FocusNode] that this [Intent]'s action should be performed on.
+  final FocusNode focusNode;
+
+  /// The [PointerDownEvent] that initiated this [Intent].
+  final PointerDownEvent pointerDownEvent;
+}
+
+/// An [Intent] that represents a tap outside the field.
+///
+/// Invoked when the user taps up outside the focused [EditableText] if
+/// [EditableText.onTapUpOutside] is null.
+///
+/// Override this [Intent] to modify the default behavior, which is to unfocus
+/// on a touch event on web and do nothing on other platforms.
+///
+/// {@tool dartpad}
+/// A common requirement is to unfocus text fields when the user taps outside of
+/// it. For UX reasons, it's often desirable to only unfocus when the user taps
+/// outside of the text field, but not when they scroll.
+///
+/// To achieve this, you can override the default behavior of
+/// [EditableTextTapOutsideIntent] and [EditableTextTapUpOutsideIntent] to check
+/// the difference in distance between the pointer down and pointer up events
+/// before potentially unfocusing.
+///
+/// ** See code in examples/api/lib/widgets/text_editing_intents/editable_text_tap_up_outside_intent.0.dart **
+/// {@end-tool}
+///
+/// See also:
+///
+///  * [Action.overridable] for an example on how to make an [Action]
+///    overridable.
+class EditableTextTapUpOutsideIntent extends Intent {
+  /// Creates an [EditableTextTapUpOutsideIntent].
+  const EditableTextTapUpOutsideIntent({required this.focusNode, required this.pointerUpEvent});
+
+  /// The [FocusNode] that this [Intent]'s action should be performed on.
+  final FocusNode focusNode;
+
+  /// The [PointerUpEvent] that initiated this [Intent].
+  final PointerUpEvent pointerUpEvent;
 }

@@ -2,11 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:ui';
+/// @docImport 'package:flutter/material.dart';
+///
+/// @docImport 'editable_text.dart';
+/// @docImport 'text.dart';
+library;
 
+import 'basic.dart';
 import 'framework.dart';
 import 'inherited_theme.dart';
 
+// Examples can assume:
+// late BuildContext context;
 
 /// The selection style to apply to descendant [EditableText] widgets which
 /// don't have an explicit style.
@@ -25,21 +32,55 @@ class DefaultSelectionStyle extends InheritedTheme {
     super.key,
     this.cursorColor,
     this.selectionColor,
+    this.mouseCursor,
     required super.child,
   });
 
   /// A const-constructable default selection style that provides fallback
-  /// values.
+  /// values (null).
   ///
   /// Returned from [of] when the given [BuildContext] doesn't have an enclosing
   /// default selection style.
   ///
   /// This constructor creates a [DefaultTextStyle] with an invalid [child],
   /// which means the constructed value cannot be incorporated into the tree.
-  const DefaultSelectionStyle.fallback({ super.key })
+  const DefaultSelectionStyle.fallback({super.key})
     : cursorColor = null,
       selectionColor = null,
+      mouseCursor = null,
       super(child: const _NullWidget());
+
+  /// Creates a default selection style that overrides the selection styles in
+  /// scope at this point in the widget tree.
+  ///
+  /// Any Arguments that are not null replace the corresponding properties on the
+  /// default selection style for the [BuildContext] where the widget is inserted.
+  static Widget merge({
+    Key? key,
+    Color? cursorColor,
+    Color? selectionColor,
+    MouseCursor? mouseCursor,
+    required Widget child,
+  }) {
+    return Builder(
+      builder: (BuildContext context) {
+        final DefaultSelectionStyle parent = DefaultSelectionStyle.of(context);
+        return DefaultSelectionStyle(
+          key: key,
+          cursorColor: cursorColor ?? parent.cursorColor,
+          selectionColor: selectionColor ?? parent.selectionColor,
+          mouseCursor: mouseCursor ?? parent.mouseCursor,
+          child: child,
+        );
+      },
+    );
+  }
+
+  /// The default cursor and selection color (semi-transparent grey).
+  ///
+  /// This is the color that the [Text] widget uses when the specified selection
+  /// color is null.
+  static const Color defaultColor = Color(0x80808080);
 
   /// The color of the text field's cursor.
   ///
@@ -49,6 +90,11 @@ class DefaultSelectionStyle extends InheritedTheme {
 
   /// The background color of selected text.
   final Color? selectionColor;
+
+  /// The [MouseCursor] for mouse pointers hovering over selectable Text widgets.
+  ///
+  /// If this property is null, [SystemMouseCursors.text] will be used.
+  final MouseCursor? mouseCursor;
 
   /// The closest instance of this class that encloses the given context.
   ///
@@ -61,7 +107,8 @@ class DefaultSelectionStyle extends InheritedTheme {
   /// DefaultSelectionStyle style = DefaultSelectionStyle.of(context);
   /// ```
   static DefaultSelectionStyle of(BuildContext context) {
-    return context.dependOnInheritedWidgetOfExactType<DefaultSelectionStyle>() ?? const DefaultSelectionStyle.fallback();
+    return context.dependOnInheritedWidgetOfExactType<DefaultSelectionStyle>() ??
+        const DefaultSelectionStyle.fallback();
   }
 
   @override
@@ -69,14 +116,16 @@ class DefaultSelectionStyle extends InheritedTheme {
     return DefaultSelectionStyle(
       cursorColor: cursorColor,
       selectionColor: selectionColor,
-      child: child
+      mouseCursor: mouseCursor,
+      child: child,
     );
   }
 
   @override
   bool updateShouldNotify(DefaultSelectionStyle oldWidget) {
     return cursorColor != oldWidget.cursorColor ||
-           selectionColor != oldWidget.selectionColor;
+        selectionColor != oldWidget.selectionColor ||
+        mouseCursor != oldWidget.mouseCursor;
   }
 }
 
@@ -86,9 +135,9 @@ class _NullWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     throw FlutterError(
-      'A DefaultTextStyle constructed with DefaultTextStyle.fallback cannot be incorporated into the widget tree, '
-          'it is meant only to provide a fallback value returned by DefaultTextStyle.of() '
-          'when no enclosing default text style is present in a BuildContext.',
+      'A DefaultSelectionStyle constructed with DefaultSelectionStyle.fallback cannot be incorporated into the widget tree, '
+      'it is meant only to provide a fallback value returned by DefaultSelectionStyle.of() '
+      'when no enclosing default selection style is present in a BuildContext.',
     );
   }
 }

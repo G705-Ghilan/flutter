@@ -4,34 +4,35 @@
 
 import 'dart:async';
 
-import 'package:flutter_tools/src/cache.dart';
+import 'package:dap_adapters/dap_adapters.dart';
+import 'package:file/memory.dart';
+import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/debug_adapters/flutter_adapter_args.dart';
-import 'package:flutter_tools/src/globals.dart' as globals;
 import 'package:test/test.dart';
 
 import 'mocks.dart';
 
 void main() {
+  // Use the real platform as a base so that Windows bots test paths.
+  final platform = FakePlatform.fromPlatform(const LocalPlatform());
+  final FileSystemStyle fsStyle = platform.isWindows
+      ? FileSystemStyle.windows
+      : FileSystemStyle.posix;
+
   group('flutter test adapter', () {
-    final String expectedFlutterExecutable = globals.platform.isWindows
+    final expectedFlutterExecutable = platform.isWindows
         ? r'C:\fake\flutter\bin\flutter.bat'
         : '/fake/flutter/bin/flutter';
 
-    setUpAll(() {
-      Cache.flutterRoot = globals.platform.isWindows
-          ? r'C:\fake\flutter'
-          : '/fake/flutter';
-    });
-
     test('includes toolArgs', () async {
-      final MockFlutterTestDebugAdapter adapter = MockFlutterTestDebugAdapter(
-        fileSystem: globals.fs,
-        platform: globals.platform,
+      final adapter = FakeFlutterTestDebugAdapter(
+        fileSystem: MemoryFileSystem.test(style: fsStyle),
+        platform: platform,
       );
-      final Completer<void> responseCompleter = Completer<void>();
-      final MockRequest request = MockRequest();
-      final FlutterLaunchRequestArguments args = FlutterLaunchRequestArguments(
-        cwd: '/project',
+      final responseCompleter = Completer<void>();
+      final request = FakeRequest();
+      final args = FlutterLaunchRequestArguments(
+        cwd: '.',
         program: 'foo.dart',
         toolArgs: <String>['tool_arg'],
         noDebug: true,
@@ -45,14 +46,36 @@ void main() {
       expect(adapter.processArgs, contains('tool_arg'));
     });
 
+    test('includes env variables', () async {
+      final adapter = FakeFlutterTestDebugAdapter(
+        fileSystem: MemoryFileSystem.test(style: fsStyle),
+        platform: platform,
+      );
+      final responseCompleter = Completer<void>();
+      final request = FakeRequest();
+      final args = FlutterLaunchRequestArguments(
+        cwd: '.',
+        program: 'foo.dart',
+        env: <String, String>{'MY_TEST_ENV': 'MY_TEST_VALUE'},
+      );
+
+      await adapter.configurationDoneRequest(request, null, () {});
+      await adapter.launchRequest(request, args, responseCompleter.complete);
+      await responseCompleter.future;
+
+      expect(adapter.env!['MY_TEST_ENV'], 'MY_TEST_VALUE');
+    });
+
     group('includes customTool', () {
       test('with no args replaced', () async {
-        final MockFlutterTestDebugAdapter adapter = MockFlutterTestDebugAdapter(fileSystem: globals.fs,
-        platform: globals.platform,);
-        final Completer<void> responseCompleter = Completer<void>();
-        final MockRequest request = MockRequest();
-        final FlutterLaunchRequestArguments args = FlutterLaunchRequestArguments(
-          cwd: '/project',
+        final adapter = FakeFlutterTestDebugAdapter(
+          fileSystem: MemoryFileSystem.test(style: fsStyle),
+          platform: platform,
+        );
+        final responseCompleter = Completer<void>();
+        final request = FakeRequest();
+        final args = FlutterLaunchRequestArguments(
+          cwd: '.',
           program: 'foo.dart',
           customTool: '/custom/flutter',
           noDebug: true,
@@ -68,12 +91,14 @@ void main() {
       });
 
       test('with all args replaced', () async {
-        final MockFlutterTestDebugAdapter adapter = MockFlutterTestDebugAdapter(fileSystem: globals.fs,
-        platform: globals.platform,);
-        final Completer<void> responseCompleter = Completer<void>();
-        final MockRequest request = MockRequest();
-        final FlutterLaunchRequestArguments args = FlutterLaunchRequestArguments(
-          cwd: '/project',
+        final adapter = FakeFlutterTestDebugAdapter(
+          fileSystem: MemoryFileSystem.test(style: fsStyle),
+          platform: platform,
+        );
+        final responseCompleter = Completer<void>();
+        final request = FakeRequest();
+        final args = FlutterLaunchRequestArguments(
+          cwd: '.',
           program: 'foo.dart',
           customTool: '/custom/flutter',
           customToolReplacesArgs: 9999, // replaces all built-in args
@@ -91,6 +116,41 @@ void main() {
         expect(adapter.processArgs, isNot(contains('--machine')));
         expect(adapter.processArgs, contains('tool_args'));
       });
+    });
+
+    test('surfaces clean error when process terminates before debugger initialized', () async {
+      final debuggerCompleter = Completer<void>();
+      final adapter = FakeFlutterTestDebugAdapter(
+        fileSystem: MemoryFileSystem.test(style: fsStyle),
+        platform: platform,
+        customDebuggerInitialized: debuggerCompleter.future,
+      );
+      final responseCompleter = Completer<void>();
+      final request = FakeRequest();
+      final args = FlutterLaunchRequestArguments(cwd: '.', program: 'foo.dart', noDebug: false);
+
+      await adapter.configurationDoneRequest(request, null, () {});
+      final Future<void> launchFuture = adapter.launchRequest(
+        request,
+        args,
+        responseCompleter.complete,
+      );
+      await pumpEventQueue();
+
+      expect(adapter.waitingForDebugger, isTrue);
+
+      adapter.handleExitCode(255);
+
+      expect(
+        launchFuture,
+        throwsA(
+          isA<DebugAdapterException>().having(
+            (DebugAdapterException e) => e.message,
+            'message',
+            'Session terminated before debugger initialized: (255)',
+          ),
+        ),
+      );
     });
   });
 }

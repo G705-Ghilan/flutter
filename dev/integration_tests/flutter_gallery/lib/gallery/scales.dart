@@ -13,11 +13,10 @@ class GalleryTextScaleValue {
 
   @override
   bool operator ==(Object other) {
-    if (other.runtimeType != runtimeType)
+    if (other.runtimeType != runtimeType) {
       return false;
-    return other is GalleryTextScaleValue
-        && other.scale == scale
-        && other.label == label;
+    }
+    return other is GalleryTextScaleValue && other.scale == scale && other.label == label;
   }
 
   @override
@@ -27,7 +26,6 @@ class GalleryTextScaleValue {
   String toString() {
     return '$runtimeType($label)';
   }
-
 }
 
 const List<GalleryTextScaleValue> kAllGalleryTextScaleValues = <GalleryTextScaleValue>[
@@ -47,11 +45,12 @@ class GalleryVisualDensityValue {
 
   @override
   bool operator ==(Object other) {
-    if (other.runtimeType != runtimeType)
+    if (other.runtimeType != runtimeType) {
       return false;
-    return other is GalleryVisualDensityValue
-        && other.visualDensity == visualDensity
-        && other.label == label;
+    }
+    return other is GalleryVisualDensityValue &&
+        other.visualDensity == visualDensity &&
+        other.label == label;
   }
 
   @override
@@ -61,7 +60,6 @@ class GalleryVisualDensityValue {
   String toString() {
     return '$runtimeType($label)';
   }
-
 }
 
 const List<GalleryVisualDensityValue> kAllGalleryVisualDensityValues = <GalleryVisualDensityValue>[

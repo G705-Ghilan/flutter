@@ -16,10 +16,17 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
+static constexpr int kBatteryError = -1;
+static constexpr int kNoBattery = -2;
+
 static int GetBatteryLevel() {
   SYSTEM_POWER_STATUS status;
-  if (GetSystemPowerStatus(&status) == 0 || status.BatteryLifePercent == 255) {
-    return -1;
+  if (GetSystemPowerStatus(&status) == 0) {
+    return kBatteryError;
+  } else if (status.BatteryFlag == 128) {
+    return kNoBattery;
+  } else if (status.BatteryLifePercent == 255) {
+    return kBatteryError;
   }
   return status.BatteryLifePercent;
 }
@@ -59,10 +66,12 @@ bool FlutterWindow::OnCreate() {
         if (call.method_name() == "getBatteryLevel") {
           int battery_level = GetBatteryLevel();
 
-          if (battery_level != -1) {
-            result->Success(battery_level);
-          } else {
+          if (battery_level == kBatteryError) {
             result->Error("UNAVAILABLE", "Battery level not available.");
+          } else if (battery_level == kNoBattery) {
+            result->Error("NO_BATTERY", "Device does not have a battery.");
+          } else {
+            result->Success(battery_level);
           }
         } else {
           result->NotImplemented();
@@ -84,6 +93,16 @@ bool FlutterWindow::OnCreate() {
           }));
 
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
+
+  flutter_controller_->engine()->SetNextFrameCallback([&]() {
+    this->Show();
+  });
+
+  // Flutter can complete the first frame before the "show window" callback is
+  // registered. The following call ensures a frame is pending to ensure the
+  // window is shown. It is a no-op if the first frame hasn't completed yet.
+  flutter_controller_->ForceRedraw();
+
   return true;
 }
 

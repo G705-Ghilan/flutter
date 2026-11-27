@@ -51,10 +51,9 @@ Future<Uint8List> consolidateHttpClientResponseBytes(
   bool autoUncompress = true,
   BytesReceivedCallback? onBytesReceived,
 }) {
-  assert(autoUncompress != null);
-  final Completer<Uint8List> completer = Completer<Uint8List>.sync();
+  final completer = Completer<Uint8List>.sync();
 
-  final _OutputBuffer output = _OutputBuffer();
+  final output = _OutputBuffer();
   ByteConversionSink sink = output;
   int? expectedContentLength = response.contentLength;
   if (expectedContentLength == -1) {
@@ -66,35 +65,38 @@ Future<Uint8List> consolidateHttpClientResponseBytes(
         // We need to un-compress the bytes as they come in.
         sink = gzip.decoder.startChunkedConversion(output);
       }
-      break;
     case HttpClientResponseCompressionState.decompressed:
       // response.contentLength will not match our bytes stream, so we declare
       // that we don't know the expected content length.
       expectedContentLength = null;
-      break;
     case HttpClientResponseCompressionState.notCompressed:
       // Fall-through.
       break;
   }
 
-  int bytesReceived = 0;
+  var bytesReceived = 0;
   late final StreamSubscription<List<int>> subscription;
-  subscription = response.listen((List<int> chunk) {
-    sink.add(chunk);
-    if (onBytesReceived != null) {
-      bytesReceived += chunk.length;
-      try {
-        onBytesReceived(bytesReceived, expectedContentLength);
-      } catch (error, stackTrace) {
-        completer.completeError(error, stackTrace);
-        subscription.cancel();
-        return;
+  subscription = response.listen(
+    (List<int> chunk) {
+      sink.add(chunk);
+      if (onBytesReceived != null) {
+        bytesReceived += chunk.length;
+        try {
+          onBytesReceived(bytesReceived, expectedContentLength);
+        } catch (error, stackTrace) {
+          completer.completeError(error, stackTrace);
+          subscription.cancel();
+          return;
+        }
       }
-    }
-  }, onDone: () {
-    sink.close();
-    completer.complete(output.bytes);
-  }, onError: completer.completeError, cancelOnError: true);
+    },
+    onDone: () {
+      sink.close();
+      completer.complete(output.bytes);
+    },
+    onError: completer.completeError,
+    cancelOnError: true,
+  );
 
   return completer.future;
 }
@@ -118,7 +120,7 @@ class _OutputBuffer extends ByteConversionSinkBase {
       return;
     }
     _bytes = Uint8List(_contentLength);
-    int offset = 0;
+    var offset = 0;
     for (final List<int> chunk in _chunks!) {
       _bytes!.setRange(offset, offset + chunk.length, chunk);
       offset += chunk.length;

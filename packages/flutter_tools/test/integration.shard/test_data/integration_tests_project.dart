@@ -11,10 +11,10 @@ import 'tests_project.dart';
 
 class IntegrationTestsProject extends Project implements TestsProject {
   @override
-  final String pubspec = '''
+  final pubspec = '''
   name: test
   environment:
-    sdk: '>=2.12.0-0 <3.0.0'
+    sdk: ^3.7.0-0
 
   dependencies:
     flutter:
@@ -31,7 +31,7 @@ class IntegrationTestsProject extends Project implements TestsProject {
   String get main => '// Unused';
 
   @override
-  final String testContent = r'''
+  final testContent = r'''
   import 'package:flutter_test/flutter_test.dart';
   import 'package:integration_test/integration_test.dart';
 
@@ -48,21 +48,21 @@ class IntegrationTestsProject extends Project implements TestsProject {
   ''';
 
   @override
-  Future<void> setUpIn(Directory dir) {
+  Future<void> setUpIn(Directory dir, {bool generateMain = true}) {
     this.dir = dir;
     writeFile(testFilePath, testContent);
-    return super.setUpIn(dir);
+    return super.setUpIn(dir, generateMain: generateMain);
   }
 
   @override
   String get testFilePath => fileSystem.path.join(dir.path, 'integration_test', 'app_test.dart');
 
   @override
-  Uri get breakpointUri => throw UnimplementedError();
+  Uri get breakpointUri => Uri.file(testFilePath);
 
   @override
   Uri get breakpointAppUri => throw UnimplementedError();
 
   @override
-  int get breakpointLine => throw UnimplementedError();
+  int get breakpointLine => lineContaining(testContent, '// BREAKPOINT');
 }

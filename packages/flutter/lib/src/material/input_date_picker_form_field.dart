@@ -2,9 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'date_picker.dart';
+/// @docImport 'text_field.dart';
+library;
+
 import 'package:flutter/widgets.dart';
 
 import 'date.dart';
+import 'date_picker_theme.dart';
 import 'input_border.dart';
 import 'input_decorator.dart';
 import 'material_localizations.dart';
@@ -41,9 +46,6 @@ class InputDatePickerFormField extends StatefulWidget {
   /// for [initialDate].
   ///
   /// [firstDate] must be on or before [lastDate].
-  ///
-  /// [firstDate], [lastDate], and [autofocus] must be non-null.
-  ///
   InputDatePickerFormField({
     super.key,
     DateTime? initialDate,
@@ -58,12 +60,12 @@ class InputDatePickerFormField extends StatefulWidget {
     this.fieldLabelText,
     this.keyboardType,
     this.autofocus = false,
-  }) : assert(firstDate != null),
-       assert(lastDate != null),
-       assert(autofocus != null),
-       initialDate = initialDate != null ? DateUtils.dateOnly(initialDate) : null,
-       firstDate = DateUtils.dateOnly(firstDate),
-       lastDate = DateUtils.dateOnly(lastDate) {
+    this.acceptEmptyDate = false,
+    this.focusNode,
+    this.calendarDelegate = const GregorianCalendarDelegate(),
+  }) : initialDate = initialDate != null ? calendarDelegate.dateOnly(initialDate) : null,
+       firstDate = calendarDelegate.dateOnly(firstDate),
+       lastDate = calendarDelegate.dateOnly(lastDate) {
     assert(
       !this.lastDate.isBefore(this.firstDate),
       'lastDate ${this.lastDate} must be on or after firstDate ${this.firstDate}.',
@@ -77,7 +79,9 @@ class InputDatePickerFormField extends StatefulWidget {
       'initialDate ${this.initialDate} must be on or before lastDate ${this.lastDate}.',
     );
     assert(
-      selectableDayPredicate == null || initialDate == null || selectableDayPredicate!(this.initialDate!),
+      selectableDayPredicate == null ||
+          initialDate == null ||
+          selectableDayPredicate!(this.initialDate!),
       'Provided initialDate ${this.initialDate} must satisfy provided selectableDayPredicate.',
     );
   }
@@ -133,6 +137,19 @@ class InputDatePickerFormField extends StatefulWidget {
   /// {@macro flutter.widgets.editableText.autofocus}
   final bool autofocus;
 
+  /// Determines if an empty date would show [errorFormatText] or not.
+  ///
+  /// Defaults to false.
+  ///
+  /// If true, [errorFormatText] is not shown when the date input field is empty.
+  final bool acceptEmptyDate;
+
+  /// {@macro flutter.widgets.Focus.focusNode}
+  final FocusNode? focusNode;
+
+  /// {@macro flutter.material.calendar_date_picker.calendarDelegate}
+  final CalendarDelegate<DateTime> calendarDelegate;
+
   @override
   State<InputDatePickerFormField> createState() => _InputDatePickerFormFieldState();
 }
@@ -171,44 +188,45 @@ class _InputDatePickerFormFieldState extends State<InputDatePickerFormField> {
           _selectedDate = widget.initialDate;
           _updateValueForSelectedDate();
         });
-      });
+      }, debugLabel: 'InputDatePickerFormField.update');
     }
   }
 
   void _updateValueForSelectedDate() {
     if (_selectedDate != null) {
       final MaterialLocalizations localizations = MaterialLocalizations.of(context);
-      _inputText = localizations.formatCompactDate(_selectedDate!);
-      TextEditingValue textEditingValue = _controller.value.copyWith(text: _inputText);
+      _inputText = widget.calendarDelegate.formatCompactDate(_selectedDate!, localizations);
+      var textEditingValue = TextEditingValue(text: _inputText!);
       // Select the new text if we are auto focused and haven't selected the text before.
       if (widget.autofocus && !_autoSelected) {
-        textEditingValue = textEditingValue.copyWith(selection: TextSelection(
-          baseOffset: 0,
-          extentOffset: _inputText!.length,
-        ));
+        textEditingValue = textEditingValue.copyWith(
+          selection: TextSelection(baseOffset: 0, extentOffset: _inputText!.length),
+        );
         _autoSelected = true;
       }
       _controller.value = textEditingValue;
     } else {
       _inputText = '';
-      _controller.value = _controller.value.copyWith(text: _inputText);
+      _controller.value = TextEditingValue(text: _inputText!);
     }
   }
 
   DateTime? _parseDate(String? text) {
     final MaterialLocalizations localizations = MaterialLocalizations.of(context);
-    return localizations.parseCompactDate(text);
+    return widget.calendarDelegate.parseCompactDate(text, localizations);
   }
 
   bool _isValidAcceptableDate(DateTime? date) {
-    return
-      date != null &&
-      !date.isBefore(widget.firstDate) &&
-      !date.isAfter(widget.lastDate) &&
-      (widget.selectableDayPredicate == null || widget.selectableDayPredicate!(date));
+    return date != null &&
+        !date.isBefore(widget.firstDate) &&
+        !date.isAfter(widget.lastDate) &&
+        (widget.selectableDayPredicate == null || widget.selectableDayPredicate!(date));
   }
 
   String? _validateDate(String? text) {
+    if ((text == null || text.isEmpty) && widget.acceptEmptyDate) {
+      return null;
+    }
     final DateTime? date = _parseDate(text);
     if (date == null) {
       return widget.errorFormatText ?? MaterialLocalizations.of(context).invalidDateFormatLabel;
@@ -237,21 +255,36 @@ class _InputDatePickerFormFieldState extends State<InputDatePickerFormField> {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final bool useMaterial3 = theme.useMaterial3;
     final MaterialLocalizations localizations = MaterialLocalizations.of(context);
-    final InputDecorationTheme inputTheme = Theme.of(context).inputDecorationTheme;
-    return TextFormField(
-      decoration: InputDecoration(
-        border: inputTheme.border ?? const UnderlineInputBorder(),
-        filled: inputTheme.filled,
-        hintText: widget.fieldHintText ?? localizations.dateHelpText,
-        labelText: widget.fieldLabelText ?? localizations.dateInputLabel,
+    final DatePickerThemeData datePickerTheme = theme.datePickerTheme;
+    final InputDecorationThemeData inputTheme = InputDecorationTheme.of(context);
+    final InputBorder effectiveInputBorder =
+        datePickerTheme.inputDecorationTheme?.border ??
+        inputTheme.border ??
+        (useMaterial3 ? const OutlineInputBorder() : const UnderlineInputBorder());
+
+    return Semantics(
+      container: true,
+      child: TextFormField(
+        decoration:
+            InputDecoration(
+              hintText: widget.fieldHintText ?? widget.calendarDelegate.dateHelpText(localizations),
+              labelText: widget.fieldLabelText ?? localizations.dateInputLabel,
+            ).applyDefaults(
+              inputTheme
+                  .merge(datePickerTheme.inputDecorationTheme)
+                  .copyWith(border: effectiveInputBorder),
+            ),
+        validator: _validateDate,
+        keyboardType: widget.keyboardType ?? TextInputType.datetime,
+        onSaved: _handleSaved,
+        onFieldSubmitted: _handleSubmitted,
+        autofocus: widget.autofocus,
+        controller: _controller,
+        focusNode: widget.focusNode,
       ),
-      validator: _validateDate,
-      keyboardType: widget.keyboardType ?? TextInputType.datetime,
-      onSaved: _handleSaved,
-      onFieldSubmitted: _handleSubmitted,
-      autofocus: widget.autofocus,
-      controller: _controller,
     );
   }
 }

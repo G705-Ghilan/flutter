@@ -10,38 +10,48 @@ import 'package:flutter_devicelab/framework/utils.dart';
 import 'package:path/path.dart' as path;
 
 Future<void> main() async {
+  deviceOperatingSystem = DeviceOperatingSystem.ios;
   await task(() async {
-    final String projectDirectory = '${flutterDirectory.path}/dev/integration_tests/ios_platform_view_tests';
+    TaskResult? result;
+    String? simulatorDeviceId;
+    try {
+      await testWithNewIOSSimulator('native_platform_view_ui_tests_ios', (String deviceId) async {
+        simulatorDeviceId = deviceId;
+        final projectDirectory =
+            '${flutterDirectory.path}/dev/integration_tests/ios_platform_view_tests';
 
-    await inDirectory(projectDirectory, () async {
-      section('Build clean');
+        await inDirectory(projectDirectory, () async {
+          // To address "Failed to terminate" failure.
+          section('Uninstall previously installed app');
 
-      await flutter('clean');
+          await flutter('install', options: <String>['--uninstall-only', '-d', deviceId]);
 
-      section('Build platform view app');
+          section('Build clean');
 
-      await flutter(
-        'build',
-        options: <String>[
-          'ios',
-          '-v',
-          '--release',
-          '--config-only',
-        ],
-      );
-    });
+          await flutter('clean');
 
-    section('Run platform view XCUITests');
+          section('Build platform view app');
 
-    final Device device = await devices.workingDevice;
-    if (!await runXcodeTests(
-      platformDirectory: path.join(projectDirectory, 'ios'),
-      destination: 'id=${device.deviceId}',
-      testName: 'native_platform_view_ui_tests_ios',
-    )) {
-      return TaskResult.failure('Platform view XCUITests failed');
+          await flutter('build', options: <String>['ios', '-v', '--simulator', '--config-only']);
+        });
+
+        section('Run platform view XCUITests');
+
+        if (!await runXcodeTests(
+          platformDirectory: path.join(projectDirectory, 'ios'),
+          destination: 'id=$deviceId',
+          testName: 'native_platform_view_ui_tests_ios',
+          configuration: 'Debug',
+          skipCodesign: true,
+        )) {
+          result = TaskResult.failure('Platform view XCUITests failed');
+        } else {
+          result = TaskResult.success(null);
+        }
+      });
+    } finally {
+      await removeIOSSimulator(simulatorDeviceId);
     }
-
-    return TaskResult.success(null);
+    return result ?? TaskResult.failure('Simulator creation failed');
   });
 }

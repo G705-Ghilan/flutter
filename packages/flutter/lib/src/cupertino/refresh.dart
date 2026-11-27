@@ -2,6 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'package:flutter/material.dart';
+///
+/// @docImport 'app.dart';
+/// @docImport 'nav_bar.dart';
+library;
+
 import 'dart:math';
 
 import 'package:flutter/foundation.dart' show clampDouble;
@@ -20,9 +26,7 @@ class _CupertinoSliverRefresh extends SingleChildRenderObjectWidget {
     this.refreshIndicatorLayoutExtent = 0.0,
     this.hasLayoutExtent = false,
     super.child,
-  }) : assert(refreshIndicatorLayoutExtent != null),
-       assert(refreshIndicatorLayoutExtent >= 0.0),
-       assert(hasLayoutExtent != null);
+  }) : assert(refreshIndicatorLayoutExtent >= 0.0);
 
   // The amount of space the indicator should occupy in the sliver in a
   // resting state when in the refreshing mode.
@@ -42,7 +46,10 @@ class _CupertinoSliverRefresh extends SingleChildRenderObjectWidget {
   }
 
   @override
-  void updateRenderObject(BuildContext context, covariant _RenderCupertinoSliverRefresh renderObject) {
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderCupertinoSliverRefresh renderObject,
+  ) {
     renderObject
       ..refreshIndicatorLayoutExtent = refreshIndicatorLayoutExtent
       ..hasLayoutExtent = hasLayoutExtent;
@@ -59,13 +66,10 @@ class _RenderCupertinoSliverRefresh extends RenderSliver
     with RenderObjectWithChildMixin<RenderBox> {
   _RenderCupertinoSliverRefresh({
     required double refreshIndicatorExtent,
-    required bool hasLayoutExtent,
+    required this._hasLayoutExtent,
     RenderBox? child,
-  }) : assert(refreshIndicatorExtent != null),
-       assert(refreshIndicatorExtent >= 0.0),
-       assert(hasLayoutExtent != null),
-       _refreshIndicatorExtent = refreshIndicatorExtent,
-       _hasLayoutExtent = hasLayoutExtent {
+  }) : assert(refreshIndicatorExtent >= 0.0),
+       _refreshIndicatorExtent = refreshIndicatorExtent {
     this.child = child;
   }
 
@@ -74,7 +78,6 @@ class _RenderCupertinoSliverRefresh extends RenderSliver
   double get refreshIndicatorLayoutExtent => _refreshIndicatorExtent;
   double _refreshIndicatorExtent;
   set refreshIndicatorLayoutExtent(double value) {
-    assert(value != null);
     assert(value >= 0.0);
     if (value == _refreshIndicatorExtent) {
       return;
@@ -89,7 +92,6 @@ class _RenderCupertinoSliverRefresh extends RenderSliver
   bool get hasLayoutExtent => _hasLayoutExtent;
   bool _hasLayoutExtent;
   set hasLayoutExtent(bool value) {
-    assert(value != null);
     if (value == _hasLayoutExtent) {
       return;
     }
@@ -111,8 +113,7 @@ class _RenderCupertinoSliverRefresh extends RenderSliver
     assert(constraints.growthDirection == GrowthDirection.forward);
 
     // The new layout extent this sliver should now have.
-    final double layoutExtent =
-        (_hasLayoutExtent ? 1.0 : 0.0) * _refreshIndicatorExtent;
+    final double layoutExtent = (_hasLayoutExtent ? 1.0 : 0.0) * _refreshIndicatorExtent;
     // If the new layoutExtent instructive changed, the SliverGeometry's
     // layoutExtent will take that value (on the next performLayout run). Shift
     // the scroll offset first so it doesn't make the scroll position suddenly jump.
@@ -129,17 +130,18 @@ class _RenderCupertinoSliverRefresh extends RenderSliver
     }
 
     final bool active = constraints.overlap < 0.0 || layoutExtent > 0.0;
-    final double overscrolledExtent =
-        constraints.overlap < 0.0 ? constraints.overlap.abs() : 0.0;
+    final double overscrolledExtent = constraints.overlap < 0.0 ? constraints.overlap.abs() : 0.0;
     // Layout the child giving it the space of the currently dragged overscroll
     // which may or may not include a sliver layout extent space that it will
     // keep after the user lets go during the refresh process.
     child!.layout(
       constraints.asBoxConstraints(
-        maxExtent: layoutExtent
+        maxExtent:
+            layoutExtent
             // Plus only the overscrolled portion immediately preceding this
             // sliver.
-            + overscrolledExtent,
+            +
+            overscrolledExtent,
       ),
       parentUsesSize: true,
     );
@@ -155,10 +157,7 @@ class _RenderCupertinoSliverRefresh extends RenderSliver
           max(child!.size.height, layoutExtent) - constraints.scrollOffset,
           0.0,
         ),
-        maxPaintExtent: max(
-          max(child!.size.height, layoutExtent) - constraints.scrollOffset,
-          0.0,
-        ),
+        maxPaintExtent: max(max(child!.size.height, layoutExtent) - constraints.scrollOffset, 0.0),
         layoutExtent: max(layoutExtent - constraints.scrollOffset, 0.0),
       );
     } else {
@@ -169,8 +168,7 @@ class _RenderCupertinoSliverRefresh extends RenderSliver
 
   @override
   void paint(PaintingContext paintContext, Offset offset) {
-    if (constraints.overlap < 0.0 ||
-        constraints.scrollOffset + child!.size.height > 0) {
+    if (constraints.overlap < 0.0 || constraints.scrollOffset + child!.size.height > 0) {
       paintContext.paintChild(child!, offset);
     }
   }
@@ -178,7 +176,7 @@ class _RenderCupertinoSliverRefresh extends RenderSliver
   // Nothing special done here because this sliver always paints its child
   // exactly between paintOrigin and paintExtent.
   @override
-  void applyPaintTransform(RenderObject child, Matrix4 transform) { }
+  void applyPaintTransform(RenderObject child, Matrix4 transform) {}
 }
 
 /// The current state of the refresh control.
@@ -289,7 +287,7 @@ class CupertinoSliverRefreshControl extends StatefulWidget {
   /// Create a new refresh control for inserting into a list of slivers.
   ///
   /// The [refreshTriggerPullDistance] and [refreshIndicatorExtent] arguments
-  /// must not be null and must be >= 0.
+  /// must be greater than or equal to 0.
   ///
   /// The [builder] argument may be null, in which case no indicator UI will be
   /// shown but the [onRefresh] will still be invoked. By default, [builder]
@@ -303,9 +301,7 @@ class CupertinoSliverRefreshControl extends StatefulWidget {
     this.refreshIndicatorExtent = _defaultRefreshIndicatorExtent,
     this.builder = buildRefreshIndicator,
     this.onRefresh,
-  }) : assert(refreshTriggerPullDistance != null),
-       assert(refreshTriggerPullDistance > 0.0),
-       assert(refreshIndicatorExtent != null),
+  }) : assert(refreshTriggerPullDistance > 0.0),
        assert(refreshIndicatorExtent >= 0.0),
        assert(
          refreshTriggerPullDistance >= refreshIndicatorExtent,
@@ -315,8 +311,8 @@ class CupertinoSliverRefreshControl extends StatefulWidget {
 
   /// The amount of overscroll the scrollable must be dragged to trigger a reload.
   ///
-  /// Must not be null, must be larger than 0.0 and larger than
-  /// [refreshIndicatorExtent]. Defaults to 100px when not specified.
+  /// Must be larger than zero and larger than [refreshIndicatorExtent].
+  /// Defaults to 100 pixels when not specified.
   ///
   /// When overscrolled past this distance, [onRefresh] will be called if not
   /// null and the [builder] will build in the [RefreshIndicatorMode.armed] state.
@@ -325,9 +321,9 @@ class CupertinoSliverRefreshControl extends StatefulWidget {
   /// The amount of space the refresh indicator sliver will keep holding while
   /// [onRefresh]'s [Future] is still running.
   ///
-  /// Must not be null and must be positive, but can be 0.0, in which case the
-  /// sliver will start retracting back to 0.0 as soon as the refresh is started.
-  /// Defaults to 60px when not specified.
+  /// Must be a positive number, but can be zero, in which case the sliver will
+  /// start retracting back to zero as soon as the refresh is started. Defaults
+  /// to 60 pixels when not specified.
   ///
   /// Must be smaller than [refreshTriggerPullDistance], since the sliver
   /// shouldn't grow further after triggering the refresh.
@@ -360,7 +356,8 @@ class CupertinoSliverRefreshControl extends StatefulWidget {
   /// state that gets passed into the [builder] function. Used for testing.
   @visibleForTesting
   static RefreshIndicatorMode state(BuildContext context) {
-    final _CupertinoSliverRefreshControlState state = context.findAncestorStateOfType<_CupertinoSliverRefreshControlState>()!;
+    final _CupertinoSliverRefreshControlState state = context
+        .findAncestorStateOfType<_CupertinoSliverRefreshControlState>()!;
     return state.refreshState;
   }
 
@@ -378,15 +375,19 @@ class CupertinoSliverRefreshControl extends StatefulWidget {
     double refreshTriggerPullDistance,
     double refreshIndicatorExtent,
   ) {
-    final double percentageComplete = clampDouble(pulledExtent / refreshTriggerPullDistance, 0.0, 1.0);
+    final double percentageComplete = clampDouble(
+      pulledExtent / refreshTriggerPullDistance,
+      0.0,
+      1.0,
+    );
 
-    // Place the indicator at the top of the sliver that opens up. Note that we're using
-    // a Stack/Positioned widget because the CupertinoActivityIndicator does some internal
-    // translations based on the current size (which grows as the user drags) that makes
-    // Padding calculations difficult. Rather than be reliant on the internal implementation
-    // of the activity indicator, the Positioned widget allows us to be explicit where the
-    // widget gets placed. Also note that the indicator should appear over the top of the
-    // dragged widget, hence the use of Overflow.visible.
+    // Place the indicator at the top of the sliver that opens up. We're using a
+    // Stack/Positioned widget because the CupertinoActivityIndicator does some
+    // internal translations based on the current size (which grows as the user drags)
+    // that makes Padding calculations difficult. Rather than be reliant on the
+    // internal implementation of the activity indicator, the Positioned widget allows
+    // us to be explicit where the widget gets placed. The indicator should appear
+    // over the top of the dragged widget, hence the use of Clip.none.
     return Center(
       child: Stack(
         clipBehavior: Clip.none,
@@ -395,23 +396,34 @@ class CupertinoSliverRefreshControl extends StatefulWidget {
             top: _kActivityIndicatorMargin,
             left: 0.0,
             right: 0.0,
-            child: _buildIndicatorForRefreshState(refreshState, _kActivityIndicatorRadius, percentageComplete),
+            child: _buildIndicatorForRefreshState(
+              refreshState,
+              _kActivityIndicatorRadius,
+              percentageComplete,
+            ),
           ),
         ],
       ),
     );
   }
 
-  static Widget _buildIndicatorForRefreshState(RefreshIndicatorMode refreshState, double radius, double percentageComplete) {
+  static Widget _buildIndicatorForRefreshState(
+    RefreshIndicatorMode refreshState,
+    double radius,
+    double percentageComplete,
+  ) {
     switch (refreshState) {
       case RefreshIndicatorMode.drag:
         // While we're dragging, we draw individual ticks of the spinner while simultaneously
-        // easing the opacity in. Note that the opacity curve values here were derived using
+        // easing the opacity in. The opacity curve values here were derived using
         // Xcode through inspecting a native app running on iOS 13.5.
         const Curve opacityCurve = Interval(0.0, 0.35, curve: Curves.easeInOut);
         return Opacity(
           opacity: opacityCurve.transform(percentageComplete),
-          child: CupertinoActivityIndicator.partiallyRevealed(radius: radius, progress: percentageComplete),
+          child: CupertinoActivityIndicator.partiallyRevealed(
+            radius: radius,
+            progress: percentageComplete,
+          ),
         );
       case RefreshIndicatorMode.armed:
       case RefreshIndicatorMode.refresh:
@@ -422,7 +434,7 @@ class CupertinoSliverRefreshControl extends StatefulWidget {
         return CupertinoActivityIndicator(radius: radius * percentageComplete);
       case RefreshIndicatorMode.inactive:
         // Anything else doesn't show anything.
-        return Container();
+        return const SizedBox.shrink();
     }
   }
 
@@ -469,7 +481,7 @@ class _CupertinoSliverRefreshControlState extends State<CupertinoSliverRefreshCo
       } else {
         SchedulerBinding.instance.addPostFrameCallback((Duration timestamp) {
           setState(() => hasSliverLayoutExtent = false);
-        });
+        }, debugLabel: 'Refresh.goToDone');
       }
     }
 
@@ -494,18 +506,19 @@ class _CupertinoSliverRefreshControlState extends State<CupertinoSliverRefreshCo
             // user supplied and we're always here in the middle of the sliver's
             // performLayout.
             SchedulerBinding.instance.addPostFrameCallback((Duration timestamp) {
-              refreshTask = widget.onRefresh!()..whenComplete(() {
-                if (mounted) {
-                  setState(() => refreshTask = null);
-                  // Trigger one more transition because by this time, BoxConstraint's
-                  // maxHeight might already be resting at 0 in which case no
-                  // calls to [transitionNextState] will occur anymore and the
-                  // state may be stuck in a non-inactive state.
-                  refreshState = transitionNextState();
-                }
-              });
+              refreshTask = widget.onRefresh!()
+                ..whenComplete(() {
+                  if (mounted) {
+                    setState(() => refreshTask = null);
+                    // Trigger one more transition because by this time, BoxConstraint's
+                    // maxHeight might already be resting at 0 in which case no
+                    // calls to [transitionNextState] will occur anymore and the
+                    // state may be stuck in a non-inactive state.
+                    refreshState = transitionNextState();
+                  }
+                });
               setState(() => hasSliverLayoutExtent = true);
-            });
+            }, debugLabel: 'Refresh.transition');
           }
           return RefreshIndicatorMode.armed;
         }
@@ -541,7 +554,6 @@ class _CupertinoSliverRefreshControlState extends State<CupertinoSliverRefreshCo
         } else {
           nextState = RefreshIndicatorMode.inactive;
         }
-        break;
     }
 
     return nextState;
@@ -567,7 +579,7 @@ class _CupertinoSliverRefreshControlState extends State<CupertinoSliverRefreshCo
               widget.refreshIndicatorExtent,
             );
           }
-          return Container();
+          return const LimitedBox(maxWidth: 0.0, maxHeight: 0.0, child: SizedBox.expand());
         },
       ),
     );

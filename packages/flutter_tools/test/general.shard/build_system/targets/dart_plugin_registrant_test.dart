@@ -2,12 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// TODO(gspencergoog): Remove this tag once this test's state leaks/test
-// dependencies have been fixed.
-// https://github.com/flutter/flutter/issues/85160
-// Fails with "flutter test --test-randomize-ordering-seed=20210722"
-@Tags(<String>['no-shuffle'])
-
 import 'package:file/memory.dart';
 import 'package:flutter_tools/src/artifacts.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
@@ -18,9 +12,11 @@ import 'package:flutter_tools/src/build_system/targets/dart_plugin_registrant.da
 import 'package:flutter_tools/src/project.dart';
 
 import '../../../src/common.dart';
-import '../../../src/context.dart';
+import '../../../src/fake_process_manager.dart';
+import '../../../src/fakes.dart';
+import '../../../src/package_config.dart';
 
-const String _kEmptyPubspecFile = '''
+const _kEmptyPubspecFile = '''
 name: path_provider_example
 
 dependencies:
@@ -28,46 +24,7 @@ dependencies:
     sdk: flutter
 ''';
 
-const String _kEmptyPackageJson = '''
-{
-  "configVersion": 2,
-  "packages": [
-     {
-      "name": "path_provider_example",
-      "rootUri": "../",
-      "packageUri": "lib/",
-      "languageVersion": "2.12"
-    }
-  ]
-}
-''';
-
-const String _kSamplePackageJson = '''
-{
-  "configVersion": 2,
-  "packages": [
-    {
-      "name": "path_provider_linux",
-      "rootUri": "/path_provider_linux",
-      "packageUri": "lib/",
-      "languageVersion": "2.12"
-    },
-    {
-      "name": "path_provider_example",
-      "rootUri": "../",
-      "packageUri": "lib/",
-      "languageVersion": "2.12"
-    }
-  ]
-}
-''';
-
-const String _kSamplePackagesFile = '''
-path_provider_linux:/path_provider_linux/lib/
-path_provider_example:lib/
-''';
-
-const String _kSamplePubspecFile = '''
+const _kSamplePubspecFile = '''
 name: path_provider_example
 description: Demonstrates how to use the path_provider plugin.
 
@@ -77,11 +34,11 @@ dependencies:
   path_provider_linux: 1.0.0
 ''';
 
-const String _kSamplePluginPubspec = '''
+const _kSamplePluginPubspec = '''
 name: path_provider_linux
 description: linux implementation of the path_provider plugin
 // version: 2.0.1
-// homepage: https://github.com/flutter/plugins/tree/master/packages/path_provider/path_provider_linux
+// homepage: https://github.com/flutter/plugins/tree/main/packages/path_provider/path_provider_linux
 
 flutter:
   plugin:
@@ -92,42 +49,49 @@ flutter:
         pluginClass: none
 
 environment:
-  sdk: ">=2.12.0-259.9.beta <3.0.0"
+  sdk: ^3.7.0-0
   flutter: ">=1.20.0"
 ''';
 
 void main() {
+  group('Dart plugin registrant', () {
+    late FileSystem fileSystem;
 
-  group('Dart plugin registrant' , () {
-    final FileSystem fileSystem = MemoryFileSystem.test();
+    setUp(() {
+      fileSystem = MemoryFileSystem.test();
+    });
 
-    testWithoutContext('skipped based on environment.generateDartPluginRegistry',
-        () async {
-      final Environment environment = Environment.test(
+    test('skipped based on environment.generateDartPluginRegistry', () async {
+      final environment = Environment.test(
         fileSystem.currentDirectory,
         artifacts: Artifacts.test(),
+        featureFlags: TestFeatureFlags(),
         fileSystem: fileSystem,
         logger: BufferLogger.test(),
         processManager: FakeProcessManager.any(),
       );
 
-      expect(const DartPluginRegistrantTarget().canSkip(environment), isTrue);
+      expect(await const DartPluginRegistrantTarget().canSkip(environment), isTrue);
 
-      final Environment environment2 = Environment.test(
-          fileSystem.currentDirectory,
-          artifacts: Artifacts.test(),
-          fileSystem: fileSystem,
-          logger: BufferLogger.test(),
-          processManager: FakeProcessManager.any(),
-          generateDartPluginRegistry: true);
+      final environment2 = Environment.test(
+        fileSystem.currentDirectory,
+        artifacts: Artifacts.test(),
+        featureFlags: TestFeatureFlags(),
+        fileSystem: fileSystem,
+        logger: BufferLogger.test(),
+        processManager: FakeProcessManager.any(),
+        generateDartPluginRegistry: true,
+      );
 
-      expect(const DartPluginRegistrantTarget().canSkip(environment2), isFalse);
+      expect(await const DartPluginRegistrantTarget().canSkip(environment2), isFalse);
     });
-    testWithoutContext('skipped based on platform', () async {
-      const Map<String, bool> canSkip = <String, bool>{
+
+    test('skipped based on platform', () async {
+      const canSkip = <String, bool>{
         'darwin-x64': false,
         'linux-x64': false,
         'linux-arm64': false,
+        'linux-riscv64': false,
         'windows-x64': false,
         'web-javascript': true,
         'ios': false,
@@ -138,17 +102,16 @@ void main() {
 
       for (final String targetPlatform in canSkip.keys) {
         expect(
-          const DartPluginRegistrantTarget().canSkip(
+          await const DartPluginRegistrantTarget().canSkip(
             Environment.test(
               fileSystem.currentDirectory,
               artifacts: Artifacts.test(),
+              featureFlags: TestFeatureFlags(),
               fileSystem: fileSystem,
               logger: BufferLogger.test(),
               processManager: FakeProcessManager.any(),
               generateDartPluginRegistry: true,
-              defines: <String, String>{
-                kTargetPlatform: targetPlatform,
-              },
+              defines: <String, String>{kTargetPlatform: targetPlatform},
             ),
           ),
           canSkip[targetPlatform],
@@ -156,29 +119,31 @@ void main() {
       }
     });
 
-    testUsingContext("doesn't generate dart_plugin_registrant.dart if there aren't Dart plugins", () async {
+    test("doesn't generate dart_plugin_registrant.dart if there aren't Dart plugins", () async {
       final Directory projectDir = fileSystem.directory('project')..createSync();
-      final Environment environment = Environment.test(
-          fileSystem.currentDirectory,
-          projectDir: projectDir,
-          artifacts: Artifacts.test(),
-          fileSystem: fileSystem,
-          logger: BufferLogger.test(),
-          processManager: FakeProcessManager.any(),
-          defines: <String, String>{
-            kTargetFile: projectDir.childDirectory('lib').childFile('main.dart').absolute.path,
-          },
-          generateDartPluginRegistry: true);
+      final environment = Environment.test(
+        fileSystem.currentDirectory,
+        projectDir: projectDir,
+        artifacts: Artifacts.test(),
+        featureFlags: TestFeatureFlags(),
+        fileSystem: fileSystem,
+        logger: BufferLogger.test(),
+        processManager: FakeProcessManager.any(),
+        defines: <String, String>{
+          kTargetFile: projectDir.childDirectory('lib').childFile('main.dart').absolute.path,
+        },
+        generateDartPluginRegistry: true,
+      );
 
-      projectDir
-          .childDirectory('.dart_tool')
-          .childFile('package_config.json')
-          ..createSync(recursive: true)
-          ..writeAsStringSync(_kSamplePackageJson);
+      writePackageConfigFiles(
+        directory: projectDir,
+        mainLibName: 'path_provider_example',
+        packages: <String, String>{'path_provider_linux': '/path_provider_linux'},
+      );
 
-      projectDir.childFile('pubspec.yaml').createSync();
-
-      projectDir.childFile('.packages').createSync();
+      projectDir.childFile('pubspec.yaml').writeAsStringSync('''
+name: path_provider_example
+''');
 
       final FlutterProject testProject = FlutterProject.fromDirectoryTest(projectDir);
       await DartPluginRegistrantTarget.test(testProject).build(environment);
@@ -190,37 +155,38 @@ void main() {
       expect(generatedMain.existsSync(), isFalse);
     });
 
-    testUsingContext('regenerates dart_plugin_registrant.dart', () async {
+    test('regenerates dart_plugin_registrant.dart', () async {
       final Directory projectDir = fileSystem.directory('project')..createSync();
-      final Environment environment = Environment.test(
-          fileSystem.currentDirectory,
-          projectDir: projectDir,
-          artifacts: Artifacts.test(),
-          fileSystem: fileSystem,
-          logger: BufferLogger.test(),
-          processManager: FakeProcessManager.any(),
-          defines: <String, String>{
-            kTargetFile: projectDir.childDirectory('lib').childFile('main.dart').absolute.path,
-          },
-          generateDartPluginRegistry: true);
+      final environment = Environment.test(
+        fileSystem.currentDirectory,
+        projectDir: projectDir,
+        artifacts: Artifacts.test(),
+        featureFlags: TestFeatureFlags(),
+        fileSystem: fileSystem,
+        logger: BufferLogger.test(),
+        processManager: FakeProcessManager.any(),
+        defines: <String, String>{
+          kTargetFile: projectDir.childDirectory('lib').childFile('main.dart').absolute.path,
+        },
+        generateDartPluginRegistry: true,
+      );
 
-      projectDir
-          .childDirectory('.dart_tool')
-          .childFile('package_config.json')
-          ..createSync(recursive: true)
-          ..writeAsStringSync(_kSamplePackageJson);
+      writePackageConfigFiles(
+        directory: projectDir,
+        mainLibName: 'path_provider_example',
+        packages: <String, String>{'path_provider_linux': '/path_provider_linux'},
+        languageVersions: <String, String>{'path_provider_example': '2.12'},
+      );
 
       projectDir.childFile('pubspec.yaml').writeAsStringSync(_kSamplePubspecFile);
-
-      projectDir.childFile('.packages').writeAsStringSync(_kSamplePackagesFile);
 
       projectDir.childDirectory('lib').childFile('main.dart').createSync(recursive: true);
 
       environment.fileSystem.currentDirectory
           .childDirectory('path_provider_linux')
           .childFile('pubspec.yaml')
-          ..createSync(recursive: true)
-          ..writeAsStringSync(_kSamplePluginPubspec);
+        ..createSync(recursive: true)
+        ..writeAsStringSync(_kSamplePluginPubspec);
 
       final FlutterProject testProject = FlutterProject.fromDirectoryTest(projectDir);
       await DartPluginRegistrantTarget.test(testProject).build(environment);
@@ -241,7 +207,7 @@ void main() {
           '// @dart = 2.12\n'
           '\n'
           "import 'dart:io'; // flutter_ignore: dart_io_import.\n"
-          "import 'package:path_provider_linux/path_provider_linux.dart';\n"
+          "import 'package:path_provider_linux/path_provider_linux.dart' as path_provider_linux;\n"
           '\n'
           "@pragma('vm:entry-point')\n"
           'class _PluginRegistrant {\n'
@@ -252,52 +218,52 @@ void main() {
           '    } else if (Platform.isIOS) {\n'
           '    } else if (Platform.isLinux) {\n'
           '      try {\n'
-          '        PathProviderLinux.registerWith();\n'
+          '        path_provider_linux.PathProviderLinux.registerWith();\n'
           '      } catch (err) {\n'
           '        print(\n'
           "          '`path_provider_linux` threw an error: \$err. '\n"
           "          'The app may not function as expected until you remove this plugin from pubspec.yaml'\n"
           '        );\n'
-          '        rethrow;\n'
           '      }\n'
           '\n'
           '    } else if (Platform.isMacOS) {\n'
           '    } else if (Platform.isWindows) {\n'
           '    }\n'
           '  }\n'
-          '}\n'
+          '}\n',
         ),
       );
     });
 
-    testUsingContext('removes dart_plugin_registrant.dart if plugins are removed from pubspec.yaml', () async {
+    test('removes dart_plugin_registrant.dart if plugins are removed from pubspec.yaml', () async {
       final Directory projectDir = fileSystem.directory('project')..createSync();
-      final Environment environment = Environment.test(
-          fileSystem.currentDirectory,
-          projectDir: projectDir,
-          artifacts: Artifacts.test(),
-          fileSystem: fileSystem,
-          logger: BufferLogger.test(),
-          processManager: FakeProcessManager.any(),
-          defines: <String, String>{
-            kTargetFile: projectDir.childDirectory('lib').childFile('main.dart').absolute.path,
-          },
-          generateDartPluginRegistry: true);
-      final File config = projectDir
-          .childDirectory('.dart_tool')
-          .childFile('package_config.json')
-          ..createSync(recursive: true)
-          ..writeAsStringSync(_kSamplePackageJson);
+      final environment = Environment.test(
+        fileSystem.currentDirectory,
+        projectDir: projectDir,
+        artifacts: Artifacts.test(),
+        featureFlags: TestFeatureFlags(),
+        fileSystem: fileSystem,
+        logger: BufferLogger.test(),
+        processManager: FakeProcessManager.any(),
+        defines: <String, String>{
+          kTargetFile: projectDir.childDirectory('lib').childFile('main.dart').absolute.path,
+        },
+        generateDartPluginRegistry: true,
+      );
+      writePackageConfigFiles(
+        directory: projectDir,
+        mainLibName: 'path_provider_example',
+        packages: <String, String>{'path_provider_linux': '/path_provider_linux'},
+      );
 
-      final File pubspec = projectDir.childFile('pubspec.yaml')..writeAsStringSync(_kSamplePubspecFile);
-
-      final File packages = projectDir.childFile('.packages')..writeAsStringSync(_kSamplePackagesFile);
+      final File pubspec = projectDir.childFile('pubspec.yaml')
+        ..writeAsStringSync(_kSamplePubspecFile);
 
       environment.fileSystem.currentDirectory
           .childDirectory('path_provider_linux')
           .childFile('pubspec.yaml')
-          ..createSync(recursive: true)
-          ..writeAsStringSync(_kSamplePluginPubspec);
+        ..createSync(recursive: true)
+        ..writeAsStringSync(_kSamplePluginPubspec);
 
       final File generatedMain = projectDir
           .childDirectory('.dart_tool')
@@ -310,42 +276,43 @@ void main() {
 
       // Simulate a user removing everything from pubspec.yaml.
       pubspec.writeAsStringSync(_kEmptyPubspecFile);
-      packages.writeAsStringSync(_kEmptyPackageJson);
-      config.writeAsStringSync(_kEmptyPackageJson);
+      writePackageConfigFiles(directory: projectDir, mainLibName: 'path_provider_example');
 
       await DartPluginRegistrantTarget.test(testProject).build(environment);
       expect(generatedMain.existsSync(), isFalse);
     });
 
-    testUsingContext('target file is outside the current project package', () async {
+    test('target file is outside the current project package', () async {
       final Directory projectDir = fileSystem.directory('project')..createSync();
-      final Environment environment = Environment.test(
-          fileSystem.currentDirectory,
-          projectDir: projectDir,
-          artifacts: Artifacts.test(),
-          fileSystem: fileSystem,
-          logger: BufferLogger.test(),
-          processManager: FakeProcessManager.any(),
-          defines: <String, String>{
-            kTargetFile: fileSystem.directory('root').childFile('external.dart').absolute.path,
-          },
-          generateDartPluginRegistry: true);
+      final environment = Environment.test(
+        fileSystem.currentDirectory,
+        projectDir: projectDir,
+        artifacts: Artifacts.test(),
+        featureFlags: TestFeatureFlags(),
+        fileSystem: fileSystem,
+        logger: BufferLogger.test(),
+        processManager: FakeProcessManager.any(),
+        defines: <String, String>{
+          kTargetFile: fileSystem.directory('root').childFile('external.dart').absolute.path,
+        },
+        generateDartPluginRegistry: true,
+      );
 
-      projectDir
-          .childDirectory('.dart_tool')
-          .childFile('package_config.json')
-          .writeAsStringSync(_kSamplePackageJson);
+      writePackageConfigFiles(
+        directory: projectDir,
+        mainLibName: 'path_provider_example',
+        packages: <String, String>{'path_provider_linux': '/path_provider_linux'},
+      );
 
       projectDir.childFile('pubspec.yaml').writeAsStringSync(_kSamplePubspecFile);
-
-      projectDir.childFile('.packages').writeAsStringSync(_kSamplePackagesFile);
 
       projectDir.childDirectory('lib').childFile('main.dart').createSync(recursive: true);
 
       environment.fileSystem.currentDirectory
           .childDirectory('path_provider_linux')
           .childFile('pubspec.yaml')
-          .writeAsStringSync(_kSamplePluginPubspec);
+        ..createSync(recursive: true)
+        ..writeAsStringSync(_kSamplePluginPubspec);
 
       final FlutterProject testProject = FlutterProject.fromDirectoryTest(projectDir);
       await DartPluginRegistrantTarget.test(testProject).build(environment);
@@ -367,7 +334,7 @@ void main() {
           '// @dart = 2.12\n'
           '\n'
           "import 'dart:io'; // flutter_ignore: dart_io_import.\n"
-          "import 'package:path_provider_linux/path_provider_linux.dart';\n"
+          "import 'package:path_provider_linux/path_provider_linux.dart' as path_provider_linux;\n"
           '\n'
           "@pragma('vm:entry-point')\n"
           'class _PluginRegistrant {\n'
@@ -378,20 +345,19 @@ void main() {
           '    } else if (Platform.isIOS) {\n'
           '    } else if (Platform.isLinux) {\n'
           '      try {\n'
-          '        PathProviderLinux.registerWith();\n'
+          '        path_provider_linux.PathProviderLinux.registerWith();\n'
           '      } catch (err) {\n'
           '        print(\n'
           "          '`path_provider_linux` threw an error: \$err. '\n"
           "          'The app may not function as expected until you remove this plugin from pubspec.yaml'\n"
           '        );\n'
-          '        rethrow;\n'
           '      }\n'
           '\n'
           '    } else if (Platform.isMacOS) {\n'
           '    } else if (Platform.isWindows) {\n'
           '    }\n'
           '  }\n'
-          '}\n'
+          '}\n',
         ),
       );
     });
